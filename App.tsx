@@ -429,11 +429,18 @@ export default function App() {
 
       if (result.type === 'diagram') {
           const d = result.data as DiagramData;
-          if (confirm("This will replace your current diagram. Are you sure?")) {
-              setNodes(d.nodes || []);
-              setEdges(d.edges || []);
-              setFrames(d.frames || []);
-          }
+          // Use ConfirmationDialog instead of window.confirm
+          setConfirmationState({
+              isOpen: true,
+              title: "Replace Diagram?",
+              message: "This will replace your current diagram with the imported one. All unsaved changes to the current diagram will be lost.",
+              onConfirm: () => {
+                  setNodes(d.nodes || []);
+                  setEdges(d.edges || []);
+                  setFrames(d.frames || []);
+                  setConfirmationState(prev => ({ ...prev, isOpen: false }));
+              }
+          });
       } else if (result.type === 'machine') {
           const d = result.data;
           setLibrary(prev => [...prev, {
@@ -675,7 +682,7 @@ export default function App() {
         message={confirmationState.message}
         onConfirm={confirmationState.onConfirm}
         onCancel={() => setConfirmationState(prev => ({ ...prev, isOpen: false }))}
-        confirmLabel="Delete"
+        confirmLabel={confirmationState.title.includes("Replace") ? "Import & Replace" : "Delete"}
         isDestructive={true}
       />
     </div>

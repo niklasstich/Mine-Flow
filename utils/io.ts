@@ -19,9 +19,10 @@ export const encodeData = (data: any): string => {
   );
 };
 
-// Robust Base64 decoding
+// Robust Base64 decoding with fallback
 export const decodeData = (str: string): any => {
   try {
+    // Method 1: Decode assuming URI component encoding (matches encodeData)
     const json = decodeURIComponent(
       atob(str).split('').map(function(c) {
         return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
@@ -29,8 +30,14 @@ export const decodeData = (str: string): any => {
     );
     return JSON.parse(json);
   } catch (e) {
-    console.error("Failed to decode string", e);
-    return null;
+    // Method 2: Fallback to standard Base64 decode (for legacy or external strings)
+    try {
+        const simpleJson = atob(str);
+        return JSON.parse(simpleJson);
+    } catch (e2) {
+        console.error("Failed to decode string", e, e2);
+        return null;
+    }
   }
 };
 
