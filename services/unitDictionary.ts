@@ -5,7 +5,7 @@ export const DEFAULT_UNIT_DICTIONARY: UnitDictionary = {
   item: {
     label: "Item",
     baseUnit: "count",
-    color: "#94a3b8", // slate-400
+    color: "#a1a1aa", // zinc-400 (Iron)
     units: {
       count: { label: "Count", factor: 1 },
       stack: { label: "Stack (64)", factor: 64 }
@@ -14,7 +14,7 @@ export const DEFAULT_UNIT_DICTIONARY: UnitDictionary = {
   fluid: {
     label: "Fluid",
     baseUnit: "mB",
-    color: "#3b82f6", // blue-500
+    color: "#2563eb", // blue-600 (Water)
     units: {
       mB: { label: "mB", factor: 1 },
       B: { label: "Buckets", factor: 1000 },
@@ -24,7 +24,7 @@ export const DEFAULT_UNIT_DICTIONARY: UnitDictionary = {
   energy: {
     label: "Energy",
     baseUnit: "J", 
-    color: "#eab308", // yellow-500
+    color: "#dc2626", // red-600 (Redstone)
     units: {
       J: { label: "Joules (J)", factor: 1 },
       FE: { label: "Forge Energy (FE)", factor: 10 },
@@ -35,7 +35,7 @@ export const DEFAULT_UNIT_DICTIONARY: UnitDictionary = {
   chemical: {
     label: "Chemical",
     baseUnit: "mB",
-    color: "#a855f7", // purple-500
+    color: "#c026d3", // fuchsia-600 (Potion)
     units: {
       mB: { label: "mB", factor: 1 },
       mol: { label: "Moles", factor: 100 }
@@ -44,7 +44,7 @@ export const DEFAULT_UNIT_DICTIONARY: UnitDictionary = {
   heat: {
     label: "Heat",
     baseUnit: "HU",
-    color: "#ef4444", // red-500
+    color: "#ea580c", // orange-600 (Lava)
     units: {
       HU: { label: "Heat Units", factor: 1 },
       K: { label: "Kelvin", factor: 0.5 }

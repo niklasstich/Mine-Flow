@@ -429,7 +429,6 @@ export default function App() {
 
       if (result.type === 'diagram') {
           const d = result.data as DiagramData;
-          // Use ConfirmationDialog instead of window.confirm
           setConfirmationState({
               isOpen: true,
               title: "Replace Diagram?",
@@ -478,44 +477,44 @@ export default function App() {
   const editingPrefab = editingPrefabId ? library.find(p => p.id === editingPrefabId) : null;
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans">
+    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100 font-sans">
       {/* Navbar */}
-      <header className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 shadow-lg relative z-50">
+      <header className="h-16 border-b border-zinc-800 bg-zinc-900 flex items-center justify-between px-6 shadow-lg relative z-50">
         <div className="flex items-center gap-3">
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-lg shadow-lg shadow-indigo-500/20">
+          <div className="bg-gradient-to-br from-emerald-500 to-green-700 p-2 rounded shadow-lg shadow-emerald-500/20">
             <Cpu size={24} className="text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-xl tracking-tight">MineFlow</h1>
-            <p className="text-xs text-slate-400 font-mono">Process Engineer v1.0</p>
+            <h1 className="font-bold text-xl tracking-tight text-zinc-100">MineFlow</h1>
+            <p className="text-xs text-zinc-400 font-mono">Process Engineer v1.0</p>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
           
           {/* View Mode Radio Group */}
-          <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+          <div className="flex bg-zinc-800 p-1 rounded border border-zinc-700">
              <button
                 onClick={() => setCollapseFrames(false)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${!collapseFrames ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${!collapseFrames ? 'bg-zinc-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
              >
                 <Layers size={14} />
                 Detailed
              </button>
              <button
                 onClick={() => setCollapseFrames(true)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${collapseFrames ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${collapseFrames ? 'bg-emerald-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
              >
                 <Box size={14} />
                 Collapsed
              </button>
           </div>
 
-          <div className="h-6 w-px bg-slate-700 mx-2"></div>
+          <div className="h-6 w-px bg-zinc-700 mx-2"></div>
 
           <button 
              onClick={handleOpenImport}
-             className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+             className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
              title="Import Data"
           >
              <Upload size={20} />
@@ -523,24 +522,24 @@ export default function App() {
           
           <button 
              onClick={handleExportDiagram}
-             className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors"
+             className="p-2 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded transition-colors"
              title="Share / Save Diagram"
           >
              <Share2 size={20} />
           </button>
 
-          <div className="h-6 w-px bg-slate-700 mx-2"></div>
+          <div className="h-6 w-px bg-zinc-700 mx-2"></div>
 
           <button 
             onClick={() => setIsDictOpen(true)}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg font-medium transition-all border border-slate-700 hover:text-white"
+            className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded font-medium transition-all border border-zinc-700 hover:text-white"
           >
             <Book size={18} />
             Dictionary
           </button>
           <button 
             onClick={handleAddNode}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-medium transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
           >
             <Plus size={18} />
             Add Machine

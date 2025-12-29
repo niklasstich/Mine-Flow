@@ -326,7 +326,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           y: snapToGrid(contextMenu.canvasY),
           w: 600,
           h: 400,
-          color: '#4f46e5' // Indigo
+          color: '#93c5fd' // Blue-300
       };
       setFrames(prev => [...prev, newFrame]);
       setSelectedFrameId(newFrame.id);
@@ -808,7 +808,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   return (
     <div 
-      className={`w-full h-full bg-slate-900 overflow-hidden relative focus:outline-none ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'}`}
+      className={`w-full h-full bg-[#1c1917] overflow-hidden relative focus:outline-none ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'}`}
       ref={canvasRef}
       tabIndex={0} 
       onMouseDown={handleMouseDown}
@@ -839,7 +839,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         <div 
             className="absolute inset-0 pointer-events-none opacity-20"
             style={{
-                backgroundImage: 'radial-gradient(#64748b 1px, transparent 1px)',
+                backgroundImage: 'radial-gradient(#52525b 1px, transparent 1px)', // zinc-600
                 backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
                 backgroundPosition: `${pan.x}px ${pan.y}px`
             }}
@@ -851,7 +851,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             {!frameAggregation && frames.map(frame => (
                 <div 
                     key={frame.id}
-                    className={`absolute border-2 rounded-lg pointer-events-auto group ${selectedFrameId === frame.id ? 'border-indigo-400 bg-indigo-900/10' : 'border-slate-700 bg-slate-800/30'}`}
+                    className={`absolute border-2 rounded pointer-events-auto group ${selectedFrameId === frame.id ? 'border-white bg-white/5' : 'border-zinc-600 bg-zinc-800/30'}`}
                     style={{
                         left: frame.x,
                         top: frame.y,
@@ -864,7 +864,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 >
                     {/* Label */}
                     <div 
-                        className="absolute -top-7 left-0 bg-slate-800 text-slate-300 px-2 py-1 rounded text-xs font-bold border border-slate-700 select-none whitespace-nowrap flex items-center gap-2 cursor-pointer hover:bg-slate-700 hover:text-white transition-colors"
+                        className="absolute -top-7 left-0 bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-xs font-bold border border-zinc-700 select-none whitespace-nowrap flex items-center gap-2 cursor-pointer hover:bg-zinc-700 hover:text-white transition-colors"
                         style={{ borderColor: frame.color, color: frame.color }}
                         onDoubleClick={(e) => { e.stopPropagation(); onRenameFrame(frame.id); }}
                         onContextMenu={(e) => handleFrameContextMenu(e, frame.id)}
@@ -884,7 +884,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
             {selectionBox && (
                 <div 
-                    className="absolute border border-indigo-400 bg-indigo-500/20 z-10 pointer-events-none"
+                    className="absolute border border-white/40 bg-white/10 z-10 pointer-events-none"
                     style={{
                         left: selectionBox.x,
                         top: selectionBox.y,
@@ -904,7 +904,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                     const path = getEdgePath(start.x, start.y, end.x, end.y);
                     
                     const flow = flowState.edgeFlows[edge.id];
-                    const strokeColor = unitDictionary[edge.type]?.color || '#64748b';
+                    const strokeColor = unitDictionary[edge.type]?.color || '#a1a1aa';
                     let strokeWidth = 2;
 
                     let isSelected = false;
@@ -969,7 +969,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                         return (
                             <path 
                                 d={getEdgePath(startPos.x, startPos.y, endPos.x, endPos.y)} 
-                                stroke={pendingConnection ? "#cbd5e1" : "#60a5fa"}
+                                stroke={pendingConnection ? "#d4d4d8" : "#60a5fa"} // zinc-300
                                 strokeWidth="3" 
                                 strokeDasharray="5,5" 
                                 fill="none" 
@@ -1073,37 +1073,37 @@ export const Canvas: React.FC<CanvasProps> = ({
         )}
         
         {/* Zoom Controls - Bottom Left */}
-        <div className="absolute bottom-6 left-6 z-50 pointer-events-auto flex flex-col gap-1 bg-slate-800/90 border border-slate-700 rounded-lg p-1 shadow-xl backdrop-blur">
-            <button onClick={() => setZoom(z => Math.min(z * 1.2, 5))} className="p-2 hover:bg-slate-700 rounded text-slate-300 hover:text-white" title="Zoom In"><ZoomIn size={20}/></button>
-            <div className="text-[10px] text-center text-slate-500">{Math.round(zoom * 100)}%</div>
-            <button onClick={() => setZoom(z => Math.max(z / 1.2, 0.1))} className="p-2 hover:bg-slate-700 rounded text-slate-300 hover:text-white" title="Zoom Out"><ZoomOut size={20}/></button>
-            <button onClick={() => { setZoom(1); setPan({x:0, y:0}); }} className="p-2 hover:bg-slate-700 rounded text-slate-300 hover:text-white" title="Reset View"><Move size={20}/></button>
+        <div className="absolute bottom-6 left-6 z-50 pointer-events-auto flex flex-col gap-1 bg-zinc-800/90 border border-zinc-700 rounded p-1 shadow-xl backdrop-blur">
+            <button onClick={() => setZoom(z => Math.min(z * 1.2, 5))} className="p-2 hover:bg-zinc-700 rounded text-zinc-300 hover:text-white" title="Zoom In"><ZoomIn size={20}/></button>
+            <div className="text-[10px] text-center text-zinc-500">{Math.round(zoom * 100)}%</div>
+            <button onClick={() => setZoom(z => Math.max(z / 1.2, 0.1))} className="p-2 hover:bg-zinc-700 rounded text-zinc-300 hover:text-white" title="Zoom Out"><ZoomOut size={20}/></button>
+            <button onClick={() => { setZoom(1); setPan({x:0, y:0}); }} className="p-2 hover:bg-zinc-700 rounded text-zinc-300 hover:text-white" title="Reset View"><Move size={20}/></button>
         </div>
 
         {/* Help / Status Controls - Bottom Right */}
         <div className="absolute bottom-6 right-6 z-50 pointer-events-auto flex flex-col items-end gap-3">
             {showControls ? (
-                <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-lg shadow-xl backdrop-blur w-64 animate-in fade-in slide-in-from-bottom-5">
-                    <div className="flex justify-between items-start mb-3 border-b border-slate-700 pb-2">
+                <div className="bg-zinc-800/90 border border-zinc-700 p-4 rounded shadow-xl backdrop-blur w-64 animate-in fade-in slide-in-from-bottom-5">
+                    <div className="flex justify-between items-start mb-3 border-b border-zinc-700 pb-2">
                         <div className="flex items-center gap-2">
-                             <Info size={16} className="text-indigo-400"/>
-                             <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Help & Status</h4>
+                             <Info size={16} className="text-emerald-400"/>
+                             <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">Help & Status</h4>
                         </div>
-                        <button onClick={() => setShowControls(false)} className="text-slate-500 hover:text-white transition-colors"><X size={16}/></button>
+                        <button onClick={() => setShowControls(false)} className="text-zinc-500 hover:text-white transition-colors"><X size={16}/></button>
                     </div>
                     
-                    <h5 className="text-[10px] font-bold text-slate-400 uppercase mb-1">Controls</h5>
-                    <p className="text-[10px] text-slate-400 mb-3 leading-relaxed">
-                        <span className="text-slate-300">Space + Drag</span> to Pan.<br/>
-                        <span className="text-slate-300">Wheel</span> to Zoom.<br/>
-                        <span className="text-slate-300">Right Click</span> Context Menu.<br/>
-                        <span className="text-slate-300">Drag Bkg</span> to Select Area.<br/>
+                    <h5 className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Controls</h5>
+                    <p className="text-[10px] text-zinc-400 mb-3 leading-relaxed">
+                        <span className="text-zinc-300">Space + Drag</span> to Pan.<br/>
+                        <span className="text-zinc-300">Wheel</span> to Zoom.<br/>
+                        <span className="text-zinc-300">Right Click</span> Context Menu.<br/>
+                        <span className="text-zinc-300">Drag Bkg</span> to Select Area.<br/>
                     </p>
                 </div>
             ) : (
                 <button 
                     onClick={() => setShowControls(true)}
-                    className="w-12 h-12 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg shadow-indigo-500/30 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+                    className="w-12 h-12 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full shadow-lg shadow-emerald-500/30 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
                     title="Show Controls & Help"
                 >
                     <Info size={24} />

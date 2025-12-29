@@ -37,7 +37,7 @@ export const NodeEntity: React.FC<NodeEntityProps> = ({
   const isStarved = efficiency < 0.99 && node.recipe.inputs.length > 0;
   
   // Dynamic color for status border
-  let statusColor = "border-slate-600";
+  let statusColor = "border-zinc-600";
   if (isStarved) statusColor = "border-orange-500 shadow-[0_0_15px_-3px_rgba(249,115,22,0.3)]";
   else if (efficiency >= 0.99) statusColor = "border-emerald-500/50 shadow-[0_0_15px_-3px_rgba(16,185,129,0.2)]";
 
@@ -53,7 +53,7 @@ export const NodeEntity: React.FC<NodeEntityProps> = ({
 
   return (
     <div
-      className={`absolute flex flex-col bg-slate-800 rounded-lg border-2 transition-shadow select-none group ${statusColor} ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-900' : ''}`}
+      className={`absolute flex flex-col bg-zinc-800 rounded border-2 transition-shadow select-none group ${statusColor} ${isSelected ? 'ring-2 ring-zinc-100 ring-offset-2 ring-offset-zinc-900' : ''}`}
       style={{ 
         left: node.x, 
         top: node.y,
@@ -66,28 +66,28 @@ export const NodeEntity: React.FC<NodeEntityProps> = ({
       onContextMenu={onContextMenu}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-slate-700/50 bg-slate-900/30 rounded-t-lg handle cursor-grab active:cursor-grabbing">
-        <span className="font-semibold text-slate-200 truncate pr-2">{node.label}</span>
+      <div className="flex items-center justify-between p-3 border-b border-zinc-700/50 bg-zinc-900/30 rounded-t handle cursor-grab active:cursor-grabbing">
+        <span className="font-semibold text-zinc-200 truncate pr-2">{node.label}</span>
         
         {/* Actions */}
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button 
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-blue-400 transition-colors"
+            className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-blue-400 transition-colors"
             title={isFrame ? "Rename Frame" : "Edit Recipe"}
           >
             {isFrame ? <Pencil size={14} /> : <Settings size={14} />}
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
-            className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors"
+            className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-emerald-400 transition-colors"
             title="Duplicate Machine"
           >
             <Copy size={14} />
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition-colors"
+            className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-red-400 transition-colors"
             title="Delete Machine"
           >
             <Trash2 size={14} />
@@ -106,7 +106,7 @@ export const NodeEntity: React.FC<NodeEntityProps> = ({
           )}
         </div>
 
-        <div className="text-xs text-slate-500 mb-3 font-mono">
+        <div className="text-xs text-zinc-500 mb-3 font-mono">
           {opsRate.toFixed(2)} ops/s
         </div>
 
@@ -115,7 +115,7 @@ export const NodeEntity: React.FC<NodeEntityProps> = ({
           {/* Inputs */}
           <div className="flex flex-col gap-3 w-1/2">
             {node.recipe.inputs.map((item, idx) => {
-              const color = unitDictionary[item.type]?.color || '#94a3b8';
+              const color = unitDictionary[item.type]?.color || '#a1a1aa';
               return (
               <div key={`in-${idx}`} className="relative flex items-center h-6 group/socket">
                 {/* Input Socket Target - Larger transparent hit area */}
@@ -131,8 +131,8 @@ export const NodeEntity: React.FC<NodeEntityProps> = ({
                         style={{ backgroundColor: color, borderColor: color }}
                     />
                 </div>
-                <span className="text-xs text-slate-300 truncate pl-1 select-none pointer-events-none" title={item.name}>
-                  {item.amount} {item.unit && <span className="text-slate-500 text-[10px]">{item.unit}</span>} {item.name}
+                <span className="text-xs text-zinc-300 truncate pl-1 select-none pointer-events-none" title={item.name}>
+                  {item.amount} {item.unit && <span className="text-zinc-500 text-[10px]">{item.unit}</span>} {item.name}
                 </span>
               </div>
             )})}
@@ -141,11 +141,11 @@ export const NodeEntity: React.FC<NodeEntityProps> = ({
           {/* Outputs */}
           <div className="flex flex-col gap-3 w-1/2 items-end">
             {node.recipe.outputs.map((item, idx) => {
-               const color = unitDictionary[item.type]?.color || '#94a3b8';
+               const color = unitDictionary[item.type]?.color || '#a1a1aa';
                return (
               <div key={`out-${idx}`} className="relative flex items-center justify-end h-6 w-full group/socket">
-                <span className="text-xs text-slate-300 truncate pr-1 text-right select-none pointer-events-none" title={item.name}>
-                  {item.amount} {item.unit && <span className="text-slate-500 text-[10px]">{item.unit}</span>} {item.name}
+                <span className="text-xs text-zinc-300 truncate pr-1 text-right select-none pointer-events-none" title={item.name}>
+                  {item.amount} {item.unit && <span className="text-zinc-500 text-[10px]">{item.unit}</span>} {item.name}
                 </span>
                 {/* Output Socket Target */}
                 <div
