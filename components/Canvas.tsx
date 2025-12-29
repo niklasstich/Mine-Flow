@@ -1094,7 +1094,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                     
                     <h5 className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Controls</h5>
                     <p className="text-[10px] text-zinc-400 mb-3 leading-relaxed">
-                        <span className="text-zinc-300">Space + Drag</span> to Pan.<br/>
+                        <span className="text-zinc-300">Middle Mouse</span> to Pan.<br/>
                         <span className="text-zinc-300">Wheel</span> to Zoom.<br/>
                         <span className="text-zinc-300">Right Click</span> Context Menu.<br/>
                         <span className="text-zinc-300">Drag Bkg</span> to Select Area.<br/>
