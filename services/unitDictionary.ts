@@ -49,6 +49,17 @@ export const DEFAULT_UNIT_DICTIONARY: UnitDictionary = {
       HU: { label: "Heat Units", factor: 1 },
       K: { label: "Kelvin", factor: 0.5 }
     }
+  },
+  time: {
+    label: "Time",
+    baseUnit: "seconds",
+    color: "#94a3b8", // slate-400
+    units: {
+      seconds: { label: "Seconds", factor: 1 },
+      ticks: { label: "Ticks (20t/s)", factor: 0.05 },
+      minutes: { label: "Minutes", factor: 60 },
+      hours: { label: "Hours", factor: 3600 }
+    }
   }
 };
 

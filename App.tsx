@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar';
 import { ConfirmationDialog } from './components/ConfirmationDialog';
 import { ImportExportDialog } from './components/ImportExportDialog';
 import { RenameDialog } from './components/RenameDialog';
+import { InfoPanel } from './components/InfoPanel';
 import { NodeData, Connection, Recipe, Prefab, UnitDictionary, FrameData, Blueprint } from './types';
 import { DEFAULT_RECIPE, PREFABS } from './constants';
 import { DEFAULT_UNIT_DICTIONARY } from './services/unitDictionary';
@@ -61,10 +62,31 @@ const BedrockToggle = ({ checked, onChange, label }: { checked: boolean, onChang
 );
 
 export default function App() {
-  const [nodes, setNodes] = useState<NodeData[]>([]);
-  const [edges, setEdges] = useState<Connection[]>([]);
-  const [frames, setFrames] = useState<FrameData[]>([]);
-  
+  // Canvas State - Loaded from LocalStorage
+  const [nodes, setNodes] = useState<NodeData[]>(() => {
+      try {
+          const saved = localStorage.getItem('mineflow_v2_nodes');
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) { return []; }
+  });
+  const [edges, setEdges] = useState<Connection[]>(() => {
+      try {
+          const saved = localStorage.getItem('mineflow_v2_edges');
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) { return []; }
+  });
+  const [frames, setFrames] = useState<FrameData[]>(() => {
+      try {
+          const saved = localStorage.getItem('mineflow_v2_frames');
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) { return []; }
+  });
+
+  // Selection State
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(new Set());
+  const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+
   // View State
   const [collapseFrames, setCollapseFrames] = useState(false);
   const [showEfficiency, setShowEfficiency] = useState(true);
@@ -157,6 +179,26 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('mineflow_v2_blueprints', JSON.stringify(blueprints));
   }, [blueprints]);
+  
+  // Persist Canvas State
+  useEffect(() => {
+      localStorage.setItem('mineflow_v2_nodes', JSON.stringify(nodes));
+  }, [nodes]);
+
+  useEffect(() => {
+      localStorage.setItem('mineflow_v2_edges', JSON.stringify(edges));
+  }, [edges]);
+
+  useEffect(() => {
+      localStorage.setItem('mineflow_v2_frames', JSON.stringify(frames));
+  }, [frames]);
+
+  const handleSelectMachines = (name: string) => {
+    const ids = nodes.filter(n => n.label === name).map(n => n.id);
+    setSelectedNodeIds(new Set(ids));
+    setSelectedEdgeIds(new Set()); // Don't select transfer lines
+    setSelectedFrameId(null);
+  };
 
   const handleAddNode = () => {
     const id = crypto.randomUUID();
@@ -589,6 +631,11 @@ export default function App() {
       {/* Main Area */}
       <main className="flex-1 relative overflow-hidden flex bg-[#1c1917]">
         <div className="flex-1 relative">
+            <InfoPanel 
+                nodes={nodes} 
+                selectedNodeIds={selectedNodeIds}
+                onSelectMachines={handleSelectMachines} 
+            />
             <Canvas 
                 nodes={nodes} 
                 setNodes={setNodes} 
@@ -609,6 +656,12 @@ export default function App() {
                 onDeleteCustomPrefab={handleDeleteLibraryItem}
                 collapseFrames={collapseFrames}
                 showEfficiency={showEfficiency}
+                selectedNodeIds={selectedNodeIds}
+                setSelectedNodeIds={setSelectedNodeIds}
+                selectedEdgeIds={selectedEdgeIds}
+                setSelectedEdgeIds={setSelectedEdgeIds}
+                selectedFrameId={selectedFrameId}
+                setSelectedFrameId={setSelectedFrameId}
             />
         </div>
         

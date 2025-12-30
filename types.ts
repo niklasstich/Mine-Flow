@@ -1,6 +1,6 @@
 
 export type ResourceType = string;
-export type TimeUnit = 'seconds' | 'ticks';
+export type TimeUnit = string;
 
 export interface ItemStack {
   id: string;

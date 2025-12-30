@@ -36,10 +36,10 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     nodes.forEach(node => {
       const recipe = node.recipe;
       
-      let timeInSeconds = recipe.processTime;
-      if (recipe.processTimeUnit === 'ticks') {
-        timeInSeconds = recipe.processTime / 20;
-      }
+      // Calculate time in seconds using the 'time' resource type from dictionary
+      // Defaults to 1 (factor) if 'time' type or unit is missing, effectively treating undefined as base unit
+      const timeFactor = getConversionFactor(unitDictionary, 'time', recipe.processTimeUnit || 'seconds');
+      const timeInSeconds = recipe.processTime * timeFactor;
       
       const maxOpRate = timeInSeconds > 0 ? 1 / timeInSeconds : 0;
       
@@ -145,10 +145,10 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     const actualFlowNormalized = Math.min(rawFlowNormalized, capacityLimit, targetConsumptionNormalized);
 
     // Max Potential Demand (for Starvation check)
-    let targetTimeInSeconds = targetNode.recipe.processTime;
-    if (targetNode.recipe.processTimeUnit === 'ticks') {
-        targetTimeInSeconds = targetNode.recipe.processTime / 20;
-    }
+    // Use dictionary for time conversion
+    const targetTimeFactor = getConversionFactor(unitDictionary, 'time', targetNode.recipe.processTimeUnit || 'seconds');
+    const targetTimeInSeconds = targetNode.recipe.processTime * targetTimeFactor;
+
     const maxTargetOpRate = targetTimeInSeconds > 0 ? 1 / targetTimeInSeconds : 0;
     const requiredFlowNormalized = maxTargetOpRate * (inputStack.amount * inputFactor);
 

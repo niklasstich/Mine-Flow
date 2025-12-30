@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Clock, Box, Copy, Share2 } from 'lucide-react';
 import { NodeData, Recipe, ItemStack, ResourceType, TimeUnit, UnitDictionary, ResourceDef } from '../types';
-import { getUnitsForType, getDefaultUnit } from '../services/unitDictionary';
+import { getUnitsForType, getDefaultUnit, getConversionFactor } from '../services/unitDictionary';
 
 interface RecipeDialogProps {
   node: NodeData;
@@ -93,12 +93,12 @@ export const RecipeDialog: React.FC<RecipeDialogProps> = ({ node, isOpen, onClos
   };
 
   const calculateRate = () => {
-      let time = recipe.processTime;
-      if (recipe.processTimeUnit === 'ticks') {
-          time = time / 20;
-      }
+      const timeFactor = getConversionFactor(unitDictionary, 'time', recipe.processTimeUnit || 'seconds');
+      const time = recipe.processTime * timeFactor;
       return time > 0 ? 1/time : 0;
   }
+
+  const timeUnits = getUnitsForType(unitDictionary, 'time');
 
   // Styles
   const inputClass = "bg-[#111] border border-[#555] text-sm text-[#eee] px-2 py-1 focus:outline-none focus:border-[#aaa] font-mono";
@@ -248,8 +248,10 @@ export const RecipeDialog: React.FC<RecipeDialogProps> = ({ node, isOpen, onClos
                     onChange={(e) => setRecipe(prev => ({ ...prev, processTimeUnit: e.target.value as TimeUnit }))}
                     className={inputClass}
                 >
-                    <option value="seconds">Seconds</option>
-                    <option value="ticks">Ticks (1/20s)</option>
+                    {timeUnits.map(unit => (
+                        <option key={unit.key} value={unit.key}>{unit.label}</option>
+                    ))}
+                    {timeUnits.length === 0 && <option value="seconds">Seconds</option>}
                 </select>
               </div>
             </div>

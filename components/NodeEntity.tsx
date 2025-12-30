@@ -2,6 +2,12 @@ import React, { memo } from 'react';
 import { Settings, AlertTriangle, CheckCircle, Copy, Trash2, Pencil, Box } from 'lucide-react';
 import { NodeData, FlowState, UnitDictionary } from '../types';
 
+export interface InternalNodeStatus {
+  label: string;
+  inputColor: string;
+  outputColor: string;
+}
+
 interface NodeEntityProps {
   node: NodeData;
   flowData: FlowState['nodeRates'][string];
@@ -18,7 +24,7 @@ interface NodeEntityProps {
   isFrame?: boolean;
   showEfficiency: boolean;
   isCollapsed: boolean;
-  internalLabels?: string[];
+  internalNodes?: InternalNodeStatus[];
 }
 
 // Helper to determine status color based on value
@@ -48,7 +54,7 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
   isFrame,
   showEfficiency,
   isCollapsed,
-  internalLabels
+  internalNodes
 }) => {
   const saturation = flowData?.saturation ?? 1;
   const outputRatio = flowData?.outputFlowRatio ?? 1;
@@ -63,22 +69,31 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
   const inputColor = showEfficiency ? getStatusColor(effectiveInputSat) : '#525252';
   const outputColor = showEfficiency ? getStatusColor(effectiveOutputRatio) : '#525252';
 
-  const StatusIcon = effectiveInputSat < 0.99 ? AlertTriangle : CheckCircle;
+  const InputStatusIcon = effectiveInputSat < 0.99 ? AlertTriangle : CheckCircle;
+  const OutputStatusIcon = effectiveOutputRatio < 0.99 ? AlertTriangle : CheckCircle;
+
   let bgColor = isFrame ? "bg-[#3a3a3a]" : "bg-[#252526]";
 
   const width = node.width || 240;
   const heightStyle = node.height ? { height: node.height } : {};
 
+  // Construct Box Shadow
+  // 1. Selection Ring (if selected): 2px gap (bg color), 2px white ring
+  // 2. Drop Shadow (always): 4px offset block shadow
+  const selectionShadow = isSelected ? '0 0 0 2px #1c1917, 0 0 0 4px white, ' : '';
+  const dropShadow = '4px 4px 0px rgba(0,0,0,0.5)';
+  const combinedShadow = selectionShadow + dropShadow;
+
   return (
     <div
-      className={`absolute flex flex-col rounded-sm transition-shadow select-none group font-mono ${isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#1c1917]' : ''}`}
+      className={`absolute flex flex-col rounded-sm transition-shadow select-none group font-mono ${isSelected ? 'z-30' : 'z-20'}`}
       style={{ 
         left: node.x, 
         top: node.y,
         width: width,
         ...heightStyle,
         transform: 'translate(0, 0)', // GPU handling
-        boxShadow: '4px 4px 0px rgba(0,0,0,0.5)', // Blocky shadow
+        boxShadow: combinedShadow,
         // Split Border Logic: Wrapper acts as border via padding
         background: `linear-gradient(90deg, ${inputColor} 50%, ${outputColor} 50%)`,
         padding: '2px' 
@@ -123,34 +138,40 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
 
         {/* Body */}
         <div className="p-3 relative flex-1 bg-gradient-to-br from-white/5 to-transparent flex flex-col">
-            {/* Input Saturation Indicator - Hide if Collapsed */}
+            
+            {/* Stats Row (Input Saturation | Rate | Output Efficiency) */}
             {!isCollapsed && (
-            <div className="absolute top-2 right-3 flex gap-3">
-                <div className="text-[10px] font-mono font-bold flex items-center gap-1" style={{ color: showEfficiency ? inputColor : '#888' }}>
-                    <StatusIcon size={10} /> {(effectiveInputSat * 100).toFixed(0)}%
-                </div>
-            </div>
-            )}
+                <div className="flex justify-between items-center mb-4 text-[10px] font-mono select-none">
+                     {/* Input Saturation (Left) */}
+                    <div className="flex items-center gap-1 font-bold" style={{ color: showEfficiency ? inputColor : '#888' }} title="Input Saturation">
+                        <InputStatusIcon size={10} /> {(effectiveInputSat * 100).toFixed(0)}%
+                    </div>
 
-            {/* Rate info - Hide if Collapsed */}
-            {!isCollapsed && (
-            <div className="text-xs text-[#888888] mb-4 font-mono">
-                {actualOpRate.toFixed(2)} ops/s
-            </div>
+                    {/* Rate (Center) */}
+                    <div className="text-[#666] font-normal">
+                        {actualOpRate.toFixed(2)} ops/s
+                    </div>
+
+                    {/* Output Ratio (Right) */}
+                    <div className="flex items-center gap-1 font-bold" style={{ color: showEfficiency ? outputColor : '#888' }} title="Output Efficiency">
+                         {(effectiveOutputRatio * 100).toFixed(0)}% <OutputStatusIcon size={10} />
+                    </div>
+                </div>
             )}
 
             {/* Machine List for Collapsed Frame */}
-            {isCollapsed && internalLabels && (
+            {isCollapsed && internalNodes && (
                 <div className="flex-1 overflow-y-auto mb-2 pr-1 custom-scrollbar">
                      <div className="text-[10px] text-[#777] font-bold uppercase mb-1 border-b border-[#555] pb-1">Contents</div>
                      <div className="flex flex-col gap-0.5">
-                        {internalLabels.map((label, i) => (
-                            <div key={i} className="text-[10px] text-[#ccc] truncate flex items-center gap-1">
-                                <span className="w-1 h-1 bg-[#555] rounded-full"></span>
-                                {label}
+                        {internalNodes.map((item, i) => (
+                            <div key={i} className="text-[10px] text-[#ccc] flex items-center gap-2 hover:bg-white/5 p-0.5 rounded">
+                                 <div className="w-2 h-2 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: item.inputColor }} title="Input Efficiency"/>
+                                 <span className="truncate">{item.label}</span>
+                                 <div className="w-2 h-2 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: item.outputColor }} title="Output Efficiency"/>
                             </div>
                         ))}
-                        {internalLabels.length === 0 && <div className="text-[10px] text-[#555] italic">Empty</div>}
+                        {internalNodes.length === 0 && <div className="text-[10px] text-[#555] italic">Empty</div>}
                      </div>
                 </div>
             )}

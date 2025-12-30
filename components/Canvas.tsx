@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { NodeEntity } from './NodeEntity';
+import { NodeEntity, InternalNodeStatus } from './NodeEntity';
 import { ContextMenu } from './ContextMenu';
 import { NodeContextMenu } from './NodeContextMenu';
 import { FrameContextMenu } from './FrameContextMenu';
@@ -30,6 +30,13 @@ interface CanvasProps {
   onDeleteCustomPrefab: (id: string) => void;
   collapseFrames: boolean; // Control from App
   showEfficiency: boolean;
+  // Selection Props
+  selectedNodeIds: Set<string>;
+  setSelectedNodeIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  selectedEdgeIds: Set<string>;
+  setSelectedEdgeIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  selectedFrameId: string | null;
+  setSelectedFrameId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 // Helper to determine status color based on value (Matches NodeEntity logic)
@@ -99,11 +106,10 @@ export const Canvas: React.FC<CanvasProps> = ({
     nodes, setNodes, edges, setEdges, frames, setFrames,
     onEditNode, onEditEdge, onDuplicateNode, onSaveToLibrary, onSaveFrameToLibrary, onRenameFrame, onDeleteFrame,
     prefabs, unitDictionary, isOverlayOpen,
-    onDeleteCustomPrefab, collapseFrames, showEfficiency
+    onDeleteCustomPrefab, collapseFrames, showEfficiency,
+    selectedNodeIds, setSelectedNodeIds, selectedEdgeIds, setSelectedEdgeIds, selectedFrameId, setSelectedFrameId
 }) => {
-  // Selection State
-  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
-  const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  // Selection State (Moved to Props)
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   
   // Clipboard
@@ -234,6 +240,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             setDragItem({ type: 'selection_box', startX: coords.x, startY: coords.y });
             if (!e.shiftKey) {
                 setSelectedNodeIds(new Set());
+                setSelectedEdgeIds(new Set());
                 setSelectedFrameId(null);
             }
         }
@@ -519,6 +526,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       } else {
           if (!selectedNodeIds.has(id)) {
             setSelectedNodeIds(new Set([id]));
+            setSelectedEdgeIds(new Set()); // Explicitly clear edge selection on single node click
           }
           setDragItem({ type: 'node', id, startX: coords.x, startY: coords.y });
       }
@@ -718,7 +726,17 @@ export const Canvas: React.FC<CanvasProps> = ({
                 newSelected.add(node.id);
             }
         });
+
+        // Also Select edges if both source and target are selected
+        const newSelectedEdges = new Set<string>();
+        edges.forEach(edge => {
+            if (newSelected.has(edge.sourceNodeId) && newSelected.has(edge.targetNodeId)) {
+                newSelectedEdges.add(edge.id);
+            }
+        });
+
         setSelectedNodeIds(newSelected);
+        setSelectedEdgeIds(newSelectedEdges);
         setSelectionBox(null);
     }
     if (dragItem?.type === 'node') {
@@ -851,16 +869,21 @@ export const Canvas: React.FC<CanvasProps> = ({
                    outputColor = getStatusColor(worstOutputRatio);
                 }
 
+                // Shadow logic for frames:
+                // If selected: 2px gap (#1c1917), 2px white ring, then original inset shadow
+                const selectionShadow = selectedFrameId === frame.id ? '0 0 0 2px #1c1917, 0 0 0 4px white, ' : '';
+                const insetShadow = 'inset 0 0 20px rgba(0,0,0,0.5)';
+
                 return (
                 <div 
                     key={frame.id}
-                    className={`absolute border-4 border-dashed font-mono pointer-events-auto group ${selectedFrameId === frame.id ? 'bg-white/5' : 'bg-zinc-800/10'}`}
+                    className={`absolute border-4 border-dashed font-mono pointer-events-auto group ${selectedFrameId === frame.id ? 'bg-white/5 z-10' : 'bg-zinc-800/10 z-0'}`}
                     style={{
                         left: frame.x,
                         top: frame.y,
                         width: frame.w,
                         height: frame.h,
-                        boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)',
+                        boxShadow: selectionShadow + insetShadow,
                         // Split border effect on frame
                         borderImage: `linear-gradient(90deg, ${inputColor} 50%, ${outputColor} 50%) 1`
                     }}
@@ -905,15 +928,16 @@ export const Canvas: React.FC<CanvasProps> = ({
                     const flow = flowState.edgeFlows[edge.id];
                     let strokeColor = unitDictionary[edge.type]?.color || '#a1a1aa';
                     if (showEfficiency && flow && flow.capacity > 0 && flow.capacity !== Infinity) {
-                        const utilization = flow.utilization; 
-                        if (utilization >= 0.999) strokeColor = '#FF5555'; 
-                        else strokeColor = '#55FF55'; 
+                        const utilization = flow.utilization;
+                        if (flow.status === 'bottleneck') strokeColor = '#FF5555'; // Red (>100%)
+                        else if (utilization >= 0.99) strokeColor = '#FFAA00'; // Orange (100%)
+                        else strokeColor = '#55FF55'; // Green (<100%)
                     }
                     let strokeWidth = 3;
                     let isSelected = false;
                     if (frameAggregation) {
                     } else {
-                        isSelected = selectedNodeIds.has(edge.sourceNodeId) && selectedNodeIds.has(edge.targetNodeId);
+                        isSelected = selectedEdgeIds.has(edge.id);
                     }
                     
                     const center = getEdgeCenter(start.x, start.y, end.x, end.y);
@@ -927,13 +951,38 @@ export const Canvas: React.FC<CanvasProps> = ({
                            onDoubleClick={(e) => { e.stopPropagation(); onEditEdge(edge); }}
                            onContextMenu={(e) => handleEdgeContextMenu(e, edge.id)}
                         >
+                            {/* Selection Outline (White Underlay) */}
+                            {isSelected && (
+                                <path 
+                                    d={path} 
+                                    stroke="white" 
+                                    strokeWidth={strokeWidth + 6} 
+                                    strokeOpacity={1}
+                                    fill="none"
+                                />
+                            )}
+                            
+                             {/* Selection Gap (Background Color Underlay) */}
+                             {isSelected && (
+                                <path 
+                                    d={path} 
+                                    stroke="#1c1917" 
+                                    strokeWidth={strokeWidth + 2} 
+                                    strokeOpacity={1}
+                                    fill="none"
+                                />
+                            )}
+                            
+                            {/* Main Colored Line */}
                             <path 
                                 d={path} 
-                                stroke={isSelected ? '#fff' : strokeColor} 
-                                strokeWidth={isSelected ? strokeWidth + 2 : strokeWidth} 
-                                strokeOpacity={isSelected ? 0.9 : 0.8}
+                                stroke={strokeColor} 
+                                strokeWidth={strokeWidth} 
+                                strokeOpacity={isSelected ? 1 : 0.8}
                                 fill="none"
                             />
+
+                            {/* Transparent Hit Area */}
                             <path d={path} stroke="transparent" strokeWidth="20" fill="none" />
                             
                             {/* Edge Label */}
@@ -977,7 +1026,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             <div className="pointer-events-auto z-20 relative">
                 {visibleNodes.map(node => {
                     let effectiveFlowData = flowState.nodeRates[node.id] || { efficiency: 1, saturation: 1, outputFlowRatio: 1, actualOpRate: 0, starvedItems: [], backloggedItems: [] };
-                    let internalLabels: string[] | undefined = undefined;
+                    let internalNodesData: InternalNodeStatus[] | undefined = undefined;
 
                     if (frameAggregation && frameAggregation.frameMap[node.id]) {
                         const frame = frames.find(f => f.id === node.id);
@@ -992,7 +1041,18 @@ export const Canvas: React.FC<CanvasProps> = ({
                             };
                             const agg = frameAggregation.reverseMaps[node.id];
                             if (agg) {
-                                internalLabels = agg.internalNodes.map(n => n.label);
+                                internalNodesData = agg.internalNodes.map(n => {
+                                    const rate = flowState.nodeRates[n.id];
+                                    const hasInputs = n.recipe.inputs.length > 0;
+                                    const effectiveInputSat = !hasInputs ? 1.0 : (rate?.saturation ?? 1.0);
+                                    const effectiveOutputRatio = n.recipe.outputs.length === 0 ? 1.0 : (rate?.outputFlowRatio ?? 1.0);
+                                    
+                                    return {
+                                        label: n.label,
+                                        inputColor: showEfficiency ? getStatusColor(effectiveInputSat) : '#525252',
+                                        outputColor: showEfficiency ? getStatusColor(effectiveOutputRatio) : '#525252'
+                                    };
+                                });
                             }
                         }
                     }
@@ -1039,7 +1099,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                         unitDictionary={unitDictionary}
                         showEfficiency={showEfficiency}
                         isCollapsed={collapseFrames}
-                        internalLabels={internalLabels}
+                        internalNodes={internalNodesData}
                     />
                 )})}
             </div>
@@ -1123,7 +1183,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                     
                     <h5 className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Controls</h5>
                     <p className="text-[10px] text-zinc-400 mb-3 leading-relaxed">
-                        <span className="text-zinc-300">Middle Mouse</span> to Pan.<br/>
+                        <span className="text-zinc-300">Space + Drag</span> to Pan.<br/>
                         <span className="text-zinc-300">Wheel</span> to Zoom.<br/>
                         <span className="text-zinc-300">Right Click</span> Context Menu.<br/>
                         <span className="text-zinc-300">Drag Bkg</span> to Select Area.<br/>
