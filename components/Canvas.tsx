@@ -4,7 +4,7 @@ import { ContextMenu } from './ContextMenu';
 import { NodeContextMenu } from './NodeContextMenu';
 import { FrameContextMenu } from './FrameContextMenu';
 import { EdgeContextMenu } from './EdgeContextMenu';
-import { getEdgePath, snapToGrid } from '../utils/geometry';
+import { getEdgePath, snapToGrid, getEdgeCenter } from '../utils/geometry';
 import { calculateFrameAggregation, getNodesInFrame, getFramesInFrame, FrameAggregation } from '../utils/frameUtils';
 import { NodeData, Connection, DragItem, FlowState, Prefab, UnitDictionary, ClipboardData, FrameData, Blueprint } from '../types';
 import { calculateFlows } from '../services/flowEngine';
@@ -29,68 +29,77 @@ interface CanvasProps {
   isOverlayOpen: boolean;
   onDeleteCustomPrefab: (id: string) => void;
   collapseFrames: boolean; // Control from App
+  showEfficiency: boolean;
 }
 
-// Helper to determine status color based on saturation (Matches NodeEntity logic)
-// Using Minecraft Palette
-const getStatusBorderColor = (saturation: number): string => {
-    if (saturation < 0.5) return "border-[#FF5555]"; // Red
-    if (saturation < 0.9) return "border-[#FFAA00]"; // Gold
-    if (saturation < 0.99) return "border-[#FFFF55]"; // Yellow
-    if (saturation <= 1.01) return "border-[#55FF55]"; // Green
-    if (saturation <= 1.5) return "border-[#FFFF55]"; // Yellow
-    if (saturation <= 2.0) return "border-[#FFAA00]"; // Gold
-    return "border-[#FF5555]"; // Red
+// Helper to determine status color based on value (Matches NodeEntity logic)
+const getStatusColor = (value: number): string => {
+    if (value < 0.5) return "#FF5555"; // Red
+    if (value < 0.9) return "#FFAA00"; // Gold
+    if (value < 0.99) return "#FFFF55"; // Yellow
+    if (value <= 1.01) return "#55FF55"; // Green
+    if (value <= 1.5) return "#FFFF55"; // Yellow
+    if (value <= 2.0) return "#FFAA00"; // Gold
+    return "#FF5555"; // Red
 };
 
-// Determine "worst" saturation for a group of nodes
-const calculateWorstSaturation = (nodes: NodeData[], flowState: FlowState): number => {
-    if (nodes.length === 0) return 1.0;
+// Determine "worst" metrics for a group of nodes
+const calculateWorstMetrics = (nodes: NodeData[], flowState: FlowState): { worstSat: number, worstOutputRatio: number } => {
+    if (nodes.length === 0) return { worstSat: 1.0, worstOutputRatio: 1.0 };
     
+    // Saturation Logic
     let worstSeverity = -1;
     let worstSat = 1.0;
-
     const getSeverity = (sat: number) => {
         if (sat < 0.5 || sat > 2.0) return 3; // Red
         if (sat < 0.9 || sat > 1.5) return 2; // Orange
         if (sat < 0.99 || sat > 1.01) return 1; // Yellow
         return 0; // Green
     };
-
     nodes.forEach(n => {
         const sat = flowState.nodeRates[n.id]?.saturation ?? 1.0;
-        
-        if (n.recipe.inputs.length === 0) {
-             const sev = 0;
-             if (sev > worstSeverity) {
-                 worstSeverity = 0; 
-                 worstSat = sat;
-             }
-             return;
-        }
-
+        if (n.recipe.inputs.length === 0) return; // Ignore generators for input health
         const sev = getSeverity(sat);
         if (sev > worstSeverity) {
             worstSeverity = sev;
             worstSat = sat;
-        } else if (sev === worstSeverity) {
-            // Tie-break: Pick the one furthest from ideal 1.0
-            if (Math.abs(sat - 1.0) > Math.abs(worstSat - 1.0)) {
-                worstSat = sat;
-            }
+        } else if (sev === worstSeverity && Math.abs(sat - 1.0) > Math.abs(worstSat - 1.0)) {
+            worstSat = sat;
         }
     });
 
-    if (worstSeverity === -1) return 1.0;
+    // Output Ratio Logic
+    let worstOutSeverity = -1;
+    let worstOutRatio = 1.0;
+    const getOutSeverity = (r: number) => {
+        if (r < 0.5) return 3;
+        if (r < 0.9) return 2;
+        if (r < 0.99) return 1;
+        return 0;
+    };
+    nodes.forEach(n => {
+        const r = flowState.nodeRates[n.id]?.outputFlowRatio ?? 1.0;
+        if (n.recipe.outputs.length === 0) return; // Ignore sinks for output health
+        const sev = getOutSeverity(r);
+        if (sev > worstOutSeverity) {
+            worstOutSeverity = sev;
+            worstOutRatio = r;
+        } else if (sev === worstOutSeverity && r < worstOutRatio) {
+            worstOutRatio = r;
+        }
+    });
 
-    return worstSat;
+    return { 
+        worstSat: worstSat,
+        worstOutputRatio: worstOutRatio
+    };
 };
 
 export const Canvas: React.FC<CanvasProps> = ({ 
     nodes, setNodes, edges, setEdges, frames, setFrames,
     onEditNode, onEditEdge, onDuplicateNode, onSaveToLibrary, onSaveFrameToLibrary, onRenameFrame, onDeleteFrame,
     prefabs, unitDictionary, isOverlayOpen,
-    onDeleteCustomPrefab, collapseFrames
+    onDeleteCustomPrefab, collapseFrames, showEfficiency
 }) => {
   // Selection State
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
@@ -160,9 +169,15 @@ export const Canvas: React.FC<CanvasProps> = ({
     return { frameMap, hiddenNodeIds, nodeToFrameId, edgeRemap, reverseMaps };
   }, [nodes, edges, frames, collapseFrames]); 
 
+  // Optimize Flow Calculation: Dependencies must not include x/y coords to prevent recalc on drag
   const flowState: FlowState = useMemo(() => {
     return calculateFlows(nodes, edges, unitDictionary);
-  }, [nodes, edges, unitDictionary]);
+  }, [
+    edges, 
+    unitDictionary, 
+    // Create a stable dependency key based on node IDs and recipes only
+    JSON.stringify(nodes.map(n => ({ id: n.id, recipe: n.recipe })))
+  ]);
 
   const sortedFrames = useMemo(() => {
     return [...frames].sort((a, b) => (b.w * b.h) - (a.w * a.h));
@@ -740,8 +755,10 @@ export const Canvas: React.FC<CanvasProps> = ({
     if (!node) return { x: 0, y: 0 };
     
     // Adjusted Vertical Offset based on new NodeEntity block layout
-    // Header(38) + BodyPad(12) + RateText(16) + Gap(4) + HalfRow(12) = 82px.
-    const yOffset = 82 + socketIdx * 36;
+    // Normal: Header(38) + BodyPad(12) + RateText(16+16=32) = 82px.
+    // Collapsed: Header(38) + BodyPad(12) = 50px.
+    const baseOffset = collapseFrames ? 50 : 82;
+    const yOffset = baseOffset + socketIdx * 36;
     
     const nodeWidth = node.width || 240;
     
@@ -824,29 +841,34 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         <div style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }} className="absolute inset-0 w-full h-full pointer-events-none">
             {!frameAggregation && sortedFrames.map(frame => {
-                let statusClass = 'border-[#555]';
+                let inputColor = '#555';
+                let outputColor = '#555';
+
                 const internalNodes = getNodesInFrame(frame, nodes);
-                if (internalNodes.length > 0) {
-                   const worstSat = calculateWorstSaturation(internalNodes, flowState);
-                   statusClass = getStatusBorderColor(worstSat);
+                if (showEfficiency && internalNodes.length > 0) {
+                   const { worstSat, worstOutputRatio } = calculateWorstMetrics(internalNodes, flowState);
+                   inputColor = getStatusColor(worstSat);
+                   outputColor = getStatusColor(worstOutputRatio);
                 }
 
                 return (
                 <div 
                     key={frame.id}
-                    className={`absolute border-4 border-dashed font-mono pointer-events-auto group ${statusClass} ${selectedFrameId === frame.id ? 'bg-white/5' : 'bg-zinc-800/10'}`}
+                    className={`absolute border-4 border-dashed font-mono pointer-events-auto group ${selectedFrameId === frame.id ? 'bg-white/5' : 'bg-zinc-800/10'}`}
                     style={{
                         left: frame.x,
                         top: frame.y,
                         width: frame.w,
                         height: frame.h,
-                        boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
+                        boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)',
+                        // Split border effect on frame
+                        borderImage: `linear-gradient(90deg, ${inputColor} 50%, ${outputColor} 50%) 1`
                     }}
                     onMouseDown={(e) => handleFrameMouseDown(e, frame.id)}
                 >
                     <div 
-                        className={`absolute -top-7 left-0 bg-[#222] text-[#eee] px-2 py-1 text-xs font-bold border-2 border-b-0 select-none whitespace-nowrap flex items-center gap-2 cursor-pointer hover:bg-[#333] transition-colors ${statusClass}`}
-                        style={{ color: 'inherit' }}
+                        className={`absolute -top-7 left-0 bg-[#222] text-[#eee] px-2 py-1 text-xs font-bold border-2 border-b-0 select-none whitespace-nowrap flex items-center gap-2 cursor-pointer hover:bg-[#333] transition-colors`}
+                        style={{ color: 'inherit', borderColor: '#555' }}
                         onDoubleClick={(e) => { e.stopPropagation(); onRenameFrame(frame.id); }}
                         onContextMenu={(e) => handleFrameContextMenu(e, frame.id)}
                     >
@@ -882,7 +904,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                     const path = getEdgePath(start.x, start.y, end.x, end.y);
                     const flow = flowState.edgeFlows[edge.id];
                     let strokeColor = unitDictionary[edge.type]?.color || '#a1a1aa';
-                    if (flow && flow.capacity > 0 && flow.capacity !== Infinity) {
+                    if (showEfficiency && flow && flow.capacity > 0 && flow.capacity !== Infinity) {
                         const utilization = flow.utilization; 
                         if (utilization >= 0.999) strokeColor = '#FF5555'; 
                         else strokeColor = '#55FF55'; 
@@ -893,6 +915,11 @@ export const Canvas: React.FC<CanvasProps> = ({
                     } else {
                         isSelected = selectedNodeIds.has(edge.sourceNodeId) && selectedNodeIds.has(edge.targetNodeId);
                     }
+                    
+                    const center = getEdgeCenter(start.x, start.y, end.x, end.y);
+                    const rateText = flow ? `${parseFloat(flow.rate.toFixed(1))}` : '0';
+                    const capText = flow && flow.capacity !== -1 ? ` / ${parseFloat(flow.capacity.toFixed(1))}` : '';
+                    const label = `${rateText}${capText}`;
 
                     return (
                         <g key={`${edge.sourceNodeId}-${edge.targetNodeId}-${edge.sourceSocketIdx}-${edge.targetSocketIdx}`} className="group pointer-events-auto cursor-pointer" 
@@ -908,6 +935,17 @@ export const Canvas: React.FC<CanvasProps> = ({
                                 fill="none"
                             />
                             <path d={path} stroke="transparent" strokeWidth="20" fill="none" />
+                            
+                            {/* Edge Label */}
+                            {!collapseFrames && (
+                            <foreignObject x={center.x - 40} y={center.y - 10} width={80} height={20} style={{ overflow: 'visible', pointerEvents: 'none' }}>
+                                <div className="flex justify-center items-center h-full">
+                                    <span className="px-1 py-0.5 bg-[#1c1917]/90 rounded text-[10px] text-zinc-300 font-mono whitespace-nowrap border border-zinc-700 shadow-sm opacity-90 group-hover:opacity-100 group-hover:border-zinc-500 transition-opacity">
+                                        {label}
+                                    </span>
+                                </div>
+                            </foreignObject>
+                            )}
                         </g>
                     );
                 })}
@@ -938,17 +976,24 @@ export const Canvas: React.FC<CanvasProps> = ({
 
             <div className="pointer-events-auto z-20 relative">
                 {visibleNodes.map(node => {
-                    let effectiveFlowData = flowState.nodeRates[node.id] || { efficiency: 1, saturation: 1, actualOpRate: 0, starvedItems: [], backloggedItems: [] };
+                    let effectiveFlowData = flowState.nodeRates[node.id] || { efficiency: 1, saturation: 1, outputFlowRatio: 1, actualOpRate: 0, starvedItems: [], backloggedItems: [] };
+                    let internalLabels: string[] | undefined = undefined;
+
                     if (frameAggregation && frameAggregation.frameMap[node.id]) {
                         const frame = frames.find(f => f.id === node.id);
                         if (frame) {
                             const internalNodes = getNodesInFrame(frame, nodes);
-                            const worstSat = calculateWorstSaturation(internalNodes, flowState);
+                            const { worstSat, worstOutputRatio } = calculateWorstMetrics(internalNodes, flowState);
                             effectiveFlowData = {
                                 ...effectiveFlowData,
                                 saturation: worstSat,
+                                outputFlowRatio: worstOutputRatio,
                                 efficiency: Math.min(1, worstSat) 
                             };
+                            const agg = frameAggregation.reverseMaps[node.id];
+                            if (agg) {
+                                internalLabels = agg.internalNodes.map(n => n.label);
+                            }
                         }
                     }
 
@@ -992,11 +1037,16 @@ export const Canvas: React.FC<CanvasProps> = ({
                         onSocketMouseUp={(e, sIdx, isInput) => handleSocketMouseUp(e, node.id, sIdx, isInput)}
                         onContextMenu={(e) => handleNodeContextMenu(e, node.id)}
                         unitDictionary={unitDictionary}
+                        showEfficiency={showEfficiency}
+                        isCollapsed={collapseFrames}
+                        internalLabels={internalLabels}
                     />
                 )})}
             </div>
         </div>
-
+        
+        {/* ... Rest of context menus ... */}
+        {/* Keeping existing JSX structure for context menus and controls */}
         {contextMenu && (
           <ContextMenu 
             x={contextMenu.x} 
@@ -1073,7 +1123,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                     
                     <h5 className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Controls</h5>
                     <p className="text-[10px] text-zinc-400 mb-3 leading-relaxed">
-                        <span className="text-zinc-300">Space + Drag</span> to Pan.<br/>
+                        <span className="text-zinc-300">Middle Mouse</span> to Pan.<br/>
                         <span className="text-zinc-300">Wheel</span> to Zoom.<br/>
                         <span className="text-zinc-300">Right Click</span> Context Menu.<br/>
                         <span className="text-zinc-300">Drag Bkg</span> to Select Area.<br/>
@@ -1091,4 +1141,4 @@ export const Canvas: React.FC<CanvasProps> = ({
         </div>
     </div>
   );
-};
+}

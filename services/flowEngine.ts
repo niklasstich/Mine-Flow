@@ -14,7 +14,7 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
   const outputConnections: Record<string, Record<number, string[]>> = {};
 
   nodes.forEach(n => {
-    nodeRates[n.id] = { efficiency: 0, saturation: 0, actualOpRate: 0, starvedItems: [], backloggedItems: [] };
+    nodeRates[n.id] = { efficiency: 0, saturation: 0, outputFlowRatio: 1, actualOpRate: 0, starvedItems: [], backloggedItems: [] };
     inputConnections[n.id] = {};
     outputConnections[n.id] = {};
   });
@@ -31,7 +31,7 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     outputConnections[e.sourceNodeId][e.sourceSocketIdx].push(e.id);
   });
 
-  // Iterative approach to solve for feedback loops
+  // Iterative approach to solve for feedback loops and input saturation
   for (let pass = 0; pass < 5; pass++) {
     nodes.forEach(node => {
       const recipe = node.recipe;
@@ -102,6 +102,7 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
       nodeRates[node.id] = {
         efficiency: recipe.inputs.length === 0 ? 1.0 : efficiency,
         saturation: saturation,
+        outputFlowRatio: 1.0, // Calculated later
         actualOpRate: maxOpRate * (recipe.inputs.length === 0 ? 1.0 : efficiency),
         starvedItems: recipe.inputs.length === 0 ? [] : starvedItems,
         backloggedItems: [] 
@@ -109,7 +110,7 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     });
   }
 
-  // Final Pass: Determine Edge Colors
+  // Final Pass: Determine Edge Colors and Actual Flow based on Backpressure
   edges.forEach(edge => {
     const targetNode = nodeMap.get(edge.targetNodeId);
     if (!targetNode) return;
@@ -128,13 +129,22 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     const sourceFactor = getConversionFactor(unitDictionary, outputStack.type, outputStack.unit);
     const inputFactor = getConversionFactor(unitDictionary, inputStack.type, inputStack.unit);
 
-    // Raw Flow Normalized
+    // 1. Supply: What the source is pushing
     const rawFlowNormalized = ((sourceOpRate * outputStack.amount) / splitFactor) * sourceFactor;
     
-    // Apply Capacity (Assumed Base Unit)
+    // 2. Capacity: What the pipe can handle
     const capacityLimit = edge.capacity > 0 ? edge.capacity : Infinity;
-    const actualFlowNormalized = Math.min(rawFlowNormalized, capacityLimit);
 
+    // 3. Demand: What the target actually consumes (Backpressure)
+    // We use the target's actualOpRate which accounts for ITS inputs availability.
+    // If target is stopped (rate 0), demand is 0.
+    const targetOpRate = nodeRates[targetNode.id]?.actualOpRate || 0;
+    const targetConsumptionNormalized = targetOpRate * inputStack.amount * inputFactor;
+
+    // Actual Flow is limited by the strict minimum of Supply, Capacity, and Demand
+    const actualFlowNormalized = Math.min(rawFlowNormalized, capacityLimit, targetConsumptionNormalized);
+
+    // Max Potential Demand (for Starvation check)
     let targetTimeInSeconds = targetNode.recipe.processTime;
     if (targetNode.recipe.processTimeUnit === 'ticks') {
         targetTimeInSeconds = targetNode.recipe.processTime / 20;
@@ -146,19 +156,28 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     
     const EPSILON = 0.0001;
 
-    // Bottleneck Check
-    if (rawFlowNormalized >= requiredFlowNormalized && capacityLimit < requiredFlowNormalized) {
-        status = 'bottleneck';
+    // Determine Status
+    if (rawFlowNormalized > capacityLimit + EPSILON) {
+        status = 'bottleneck'; // Pipe limited
+    } else if (rawFlowNormalized > targetConsumptionNormalized + EPSILON) {
+        status = 'overflow'; // Backed up at destination
     } else if (actualFlowNormalized < requiredFlowNormalized - EPSILON) {
-      status = 'starved'; 
-    } else if (actualFlowNormalized > requiredFlowNormalized + EPSILON) {
-      status = 'overflow';
+        // If we are delivering less than MAX demand, we are effectively starving the machine of full potential
+        // But only if supply is the issue. If demand is low (target stopped), it's not 'starved' by this edge.
+        
+        if (actualFlowNormalized >= rawFlowNormalized - EPSILON) {
+             status = 'starved'; // Supply limited
+        } else {
+             status = 'balanced'; // Demand limited (not starved by this edge)
+        }
     } else {
-      status = 'balanced';
+        status = 'balanced';
     }
 
-    // Convert back to Source Units for display rate
+    // Convert back to Source Units for display
     const displayRate = actualFlowNormalized / sourceFactor;
+    const displayCapacity = capacityLimit === Infinity ? -1 : capacityLimit / sourceFactor;
+    const displayRequired = requiredFlowNormalized / sourceFactor;
     
     // Calculate Utilization
     const utilization = capacityLimit === Infinity ? 0 : actualFlowNormalized / capacityLimit;
@@ -168,9 +187,44 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
       utilization,
       status,
       itemName: inputStack.name,
-      requiredRate: requiredFlowNormalized,
-      capacity: capacityLimit
+      requiredRate: displayRequired,
+      capacity: displayCapacity // Return capacity in Display Units
     };
+  });
+
+  // Post-Calculation: Determine Output Flow Ratios (Efficiency of Outputs)
+  nodes.forEach(node => {
+      if (node.recipe.outputs.length === 0) return; // Sinks are always efficient output-wise
+
+      let totalProduced = 0;
+      let totalFlowing = 0;
+
+      node.recipe.outputs.forEach((out, idx) => {
+          const outFactor = getConversionFactor(unitDictionary, out.type, out.unit);
+          // Produced by machine (in Base Units)
+          const produced = nodeRates[node.id].actualOpRate * out.amount * outFactor;
+          totalProduced += produced;
+
+          // Flowing out (in Base Units)
+          // Sum of all edges connected to this output
+          const edgeIds = outputConnections[node.id]?.[idx] || [];
+          edgeIds.forEach(eid => {
+              const edge = edgeMap.get(eid);
+              const flow = edgeFlows[eid];
+              if (edge && flow) {
+                   // flow.rate is in Source Units (displayRate), convert to Base
+                   totalFlowing += flow.rate * outFactor;
+              }
+          });
+      });
+
+      // Avoid division by zero. If produced is 0, machine is off, so output isn't blocked.
+      const ratio = totalProduced > 1e-9 ? totalFlowing / totalProduced : 1.0;
+      
+      if (nodeRates[node.id]) {
+          // Clamp to 0-1. Slight fp errors might make it > 1.
+          nodeRates[node.id].outputFlowRatio = Math.min(1.0, Math.max(0, ratio));
+      }
   });
 
   return { nodeRates, edgeFlows };

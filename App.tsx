@@ -15,7 +15,7 @@ import { getNodesInFrame } from './utils/frameUtils';
 import { Plus, Book, Box, Share2, Upload } from 'lucide-react';
 
 // Bedrock UI Components
-const BedrockButton = ({ onClick, children, className = "", title = "" }: { onClick?: () => void, children: React.ReactNode, className?: string, title?: string }) => (
+const BedrockButton = ({ onClick, children, className = "", title = "" }: { onClick?: () => void, children?: React.ReactNode, className?: string, title?: string }) => (
   <button
     onClick={onClick}
     title={title}
@@ -67,6 +67,7 @@ export default function App() {
   
   // View State
   const [collapseFrames, setCollapseFrames] = useState(false);
+  const [showEfficiency, setShowEfficiency] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Initialize library (built-ins + custom) from local storage
@@ -539,9 +540,15 @@ export default function App() {
         <div className="flex items-center gap-4">
           
           <BedrockToggle 
+            checked={showEfficiency} 
+            onChange={setShowEfficiency} 
+            label="Efficiency"
+          />
+
+          <BedrockToggle 
             checked={collapseFrames} 
             onChange={setCollapseFrames} 
-            label="Collapsed View"
+            label="Collapsed"
           />
 
           <div className="h-8 w-px bg-white/20 mx-2"></div>
@@ -601,6 +608,7 @@ export default function App() {
                 isOverlayOpen={isOverlayOpen}
                 onDeleteCustomPrefab={handleDeleteLibraryItem}
                 collapseFrames={collapseFrames}
+                showEfficiency={showEfficiency}
             />
         </div>
         

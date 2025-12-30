@@ -51,6 +51,7 @@ export interface FlowState {
   nodeRates: Record<string, {
     efficiency: number; // 0-1 (Clamped)
     saturation: number; // 0-Infinity (Unclamped ratio of input/required)
+    outputFlowRatio: number; // 0-1 (Ratio of output consumed / output produced)
     actualOpRate: number; // operations per second
     starvedItems: string[];
     backloggedItems: string[];

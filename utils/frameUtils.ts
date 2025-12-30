@@ -11,6 +11,7 @@ export interface FrameAggregation {
   reverseOutputMap: Record<number, { nodeId: string, socketIdx: number }>;
   
   internalNodeIds: Set<string>;
+  internalNodes: NodeData[];
 }
 
 export const getNodesInFrame = (frame: FrameData, nodes: NodeData[]): NodeData[] => {
@@ -116,6 +117,7 @@ export const calculateFrameAggregation = (
     outputMap,
     reverseInputMap,
     reverseOutputMap,
-    internalNodeIds
+    internalNodeIds,
+    internalNodes
   };
 };
