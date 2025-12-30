@@ -14,7 +14,7 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
   const outputConnections: Record<string, Record<number, string[]>> = {};
 
   nodes.forEach(n => {
-    nodeRates[n.id] = { efficiency: 0, actualOpRate: 0, starvedItems: [], backloggedItems: [] };
+    nodeRates[n.id] = { efficiency: 0, saturation: 0, actualOpRate: 0, starvedItems: [], backloggedItems: [] };
     inputConnections[n.id] = {};
     outputConnections[n.id] = {};
   });
@@ -74,8 +74,7 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
                  const sourceFactor = getConversionFactor(unitDictionary, outputStack.type, outputStack.unit);
                  const rawFlowNormalized = rawFlowSourceUnits * sourceFactor;
 
-                 // Apply Pipe Capacity Limit (Assume pipe capacity is unit-agnostic or set in Base Units. 
-                 // For complexity, let's assume Capacity is entered in Base Units of the connection type)
+                 // Apply Pipe Capacity Limit (Assume pipe capacity is unit-agnostic or set in Base Units)
                  const capacity = edge.capacity > 0 ? edge.capacity : Infinity;
                  const actualPipeFlow = Math.min(rawFlowNormalized, capacity);
                  
@@ -97,11 +96,13 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
       });
 
       const efficiency = Math.max(0, Math.min(1, limitingRatio));
-      const effectiveEfficiency = recipe.inputs.length === 0 ? 1.0 : efficiency;
+      // Saturation is the unclamped ratio. If generator (no inputs), saturation is ideal (1.0)
+      const saturation = recipe.inputs.length === 0 ? 1.0 : limitingRatio; 
 
       nodeRates[node.id] = {
-        efficiency: effectiveEfficiency,
-        actualOpRate: maxOpRate * effectiveEfficiency,
+        efficiency: recipe.inputs.length === 0 ? 1.0 : efficiency,
+        saturation: saturation,
+        actualOpRate: maxOpRate * (recipe.inputs.length === 0 ? 1.0 : efficiency),
         starvedItems: recipe.inputs.length === 0 ? [] : starvedItems,
         backloggedItems: [] 
       };
@@ -156,15 +157,18 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
       status = 'balanced';
     }
 
-    // Convert back to Source Units for display rate, or keep Base? 
-    // Let's keep display rate as Source Units so it matches the output node visual.
+    // Convert back to Source Units for display rate
     const displayRate = actualFlowNormalized / sourceFactor;
+    
+    // Calculate Utilization
+    const utilization = capacityLimit === Infinity ? 0 : actualFlowNormalized / capacityLimit;
 
     edgeFlows[edge.id] = {
       rate: displayRate,
+      utilization,
       status,
       itemName: inputStack.name,
-      requiredRate: requiredFlowNormalized, // Note: This is normalized
+      requiredRate: requiredFlowNormalized,
       capacity: capacityLimit
     };
   });

@@ -12,7 +12,53 @@ import { DEFAULT_RECIPE, PREFABS } from './constants';
 import { DEFAULT_UNIT_DICTIONARY } from './services/unitDictionary';
 import { generateDiagramString, generatePrefabString, parseImportString, DiagramData } from './utils/io';
 import { getNodesInFrame } from './utils/frameUtils';
-import { Plus, Cpu, Book, Layers, Box, Share2, Upload } from 'lucide-react';
+import { Plus, Book, Box, Share2, Upload } from 'lucide-react';
+
+// Bedrock UI Components
+const BedrockButton = ({ onClick, children, className = "", title = "" }: { onClick?: () => void, children: React.ReactNode, className?: string, title?: string }) => (
+  <button
+    onClick={onClick}
+    title={title}
+    className={`
+      bg-[#d0d1d4] hover:bg-[#e6e6e6] active:bg-[#c0c1c4]
+      text-[#1f1f1f] font-bold font-mono text-sm
+      border-2 border-[#1f1f1f] border-b-4 active:border-b-2 active:translate-y-[2px]
+      px-4 py-2 flex items-center gap-2 transition-all 
+      shadow-sm
+      ${className}
+    `}
+  >
+    {children}
+  </button>
+);
+
+const BedrockToggle = ({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label?: string }) => (
+  <div 
+    className="flex items-center gap-3 cursor-pointer select-none group" 
+    onClick={() => onChange(!checked)}
+  >
+    {label && <span className="text-[#e7e5e4] font-bold text-sm drop-shadow-md uppercase tracking-wider group-hover:text-white transition-colors">{label}</span>}
+    
+    <div className={`
+      relative w-14 h-7 border-2 border-[#18181b] 
+      ${checked ? 'bg-[#3b8526] border-[#18181b]' : 'bg-[#58585a] border-[#18181b]'} 
+      transition-colors duration-100 shadow-inner
+    `}>
+        {/* "I" Label for On state */}
+        <div className={`absolute left-2 top-1/2 -translate-y-1/2 text-[#18181b] font-black text-[10px] ${checked ? 'opacity-100' : 'opacity-0'}`}>I</div>
+        
+        {/* "O" Label for Off state */}
+        <div className={`absolute right-2 top-1/2 -translate-y-1/2 text-[#a1a1aa] font-black text-[10px] ${!checked ? 'opacity-100' : 'opacity-0'}`}>O</div>
+
+        {/* Knob */}
+        <div className={`
+            absolute top-[2px] bottom-[2px] w-6 bg-[#d0d1d4] border-2 border-[#18181b]
+            transition-all duration-200 ease-out
+            ${checked ? 'translate-x-[20px]' : 'translate-x-[2px]'}
+        `} />
+    </div>
+  </div>
+);
 
 export default function App() {
   const [nodes, setNodes] = useState<NodeData[]>([]);
@@ -477,78 +523,64 @@ export default function App() {
   const editingPrefab = editingPrefabId ? library.find(p => p.id === editingPrefabId) : null;
 
   return (
-    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100 font-sans">
+    <div className="flex flex-col h-screen bg-[#1c1917] text-stone-100 font-sans">
       {/* Navbar */}
-      <header className="h-16 border-b border-zinc-800 bg-zinc-900 flex items-center justify-between px-6 shadow-lg relative z-50">
+      <header className="h-16 bg-[#5d4037] border-t-8 border-[#4ade80] flex items-center justify-between px-6 shadow-lg relative z-50">
         <div className="flex items-center gap-3">
-          <div className="bg-gradient-to-br from-emerald-500 to-green-700 p-2 rounded shadow-lg shadow-emerald-500/20">
-            <Cpu size={24} className="text-white" />
+          <div className="bg-stone-900/40 p-2 rounded shadow-sm">
+            <Box size={24} className="text-[#a8a29e]" />
           </div>
           <div>
-            <h1 className="font-bold text-xl tracking-tight text-zinc-100">MineFlow</h1>
-            <p className="text-xs text-zinc-400 font-mono">Process Engineer v1.0</p>
+            <h1 className="font-bold text-xl tracking-tight text-[#e7e5e4] drop-shadow-md">MineFlow</h1>
+            <p className="text-xs text-[#d6d3d1] font-mono opacity-80">Automation Planner</p>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
           
-          {/* View Mode Radio Group */}
-          <div className="flex bg-zinc-800 p-1 rounded border border-zinc-700">
-             <button
-                onClick={() => setCollapseFrames(false)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${!collapseFrames ? 'bg-zinc-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
-             >
-                <Layers size={14} />
-                Detailed
-             </button>
-             <button
-                onClick={() => setCollapseFrames(true)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${collapseFrames ? 'bg-emerald-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
-             >
-                <Box size={14} />
-                Collapsed
-             </button>
-          </div>
+          <BedrockToggle 
+            checked={collapseFrames} 
+            onChange={setCollapseFrames} 
+            label="Collapsed View"
+          />
 
-          <div className="h-6 w-px bg-zinc-700 mx-2"></div>
+          <div className="h-8 w-px bg-white/20 mx-2"></div>
 
-          <button 
+          <BedrockButton 
              onClick={handleOpenImport}
-             className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
              title="Import Data"
           >
-             <Upload size={20} />
-          </button>
+             <Upload size={18} />
+             Import
+          </BedrockButton>
           
-          <button 
+          <BedrockButton 
              onClick={handleExportDiagram}
-             className="p-2 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded transition-colors"
              title="Share / Save Diagram"
           >
-             <Share2 size={20} />
-          </button>
+             <Share2 size={18} />
+             Export
+          </BedrockButton>
 
-          <div className="h-6 w-px bg-zinc-700 mx-2"></div>
+          <div className="h-8 w-px bg-white/20 mx-2"></div>
 
-          <button 
+          <BedrockButton 
             onClick={() => setIsDictOpen(true)}
-            className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded font-medium transition-all border border-zinc-700 hover:text-white"
           >
             <Book size={18} />
             Dictionary
-          </button>
-          <button 
+          </BedrockButton>
+          <BedrockButton 
             onClick={handleAddNode}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-medium transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
           >
             <Plus size={18} />
             Add Machine
-          </button>
+          </BedrockButton>
         </div>
       </header>
 
       {/* Main Area */}
-      <main className="flex-1 relative overflow-hidden flex">
+      <main className="flex-1 relative overflow-hidden flex bg-[#1c1917]">
         <div className="flex-1 relative">
             <Canvas 
                 nodes={nodes} 

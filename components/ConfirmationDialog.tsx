@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -23,31 +23,29 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] backdrop-blur-[2px] animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform scale-100 animate-in zoom-in-95 duration-200">
-        <div className="p-6 flex gap-4">
-            <div className={`p-3 rounded-full h-fit flex-shrink-0 ${isDestructive ? 'bg-red-500/20 text-red-500' : 'bg-indigo-500/20 text-indigo-500'}`}>
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200]">
+      <div className="bg-[#212121] border-2 border-[#555] shadow-[4px_4px_0_rgba(0,0,0,0.5)] w-full max-w-md overflow-hidden font-mono">
+        <div className="p-4 flex gap-4 bg-[#212121]">
+            <div className={`p-2 border border-[#555] h-fit flex-shrink-0 bg-[#2a2a2a] ${isDestructive ? 'text-[#FF5555]' : 'text-[#55FFFF]'}`}>
                 <AlertTriangle size={24} />
             </div>
             <div className="flex-1">
-                <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{message}</p>
+                <h3 className="text-lg font-bold text-[#eee] mb-2">{title}</h3>
+                <p className="text-[#aaa] text-xs leading-relaxed">{message}</p>
             </div>
         </div>
 
-        <div className="p-4 bg-slate-950/50 border-t border-slate-800 flex justify-end gap-3">
+        <div className="p-3 bg-[#333] border-t-2 border-[#555] flex justify-end gap-2">
             <button 
                 onClick={onCancel}
-                className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors text-sm font-medium"
+                className="bg-[#3a3a3a] border border-[#555] hover:bg-[#4a4a4a] text-[#eee] px-4 py-1.5 text-xs font-mono"
             >
                 Cancel
             </button>
             <button 
                 onClick={onConfirm}
-                className={`px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors shadow-lg ${
-                    isDestructive 
-                    ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' 
-                    : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20'
+                className={`bg-[#3a3a3a] border-2 border-[#1a1a1a] border-t-[#505050] border-l-[#505050] hover:bg-[#4a4a4a] active:bg-[#2a2a2a] active:border-t-[#1a1a1a] active:border-l-[#1a1a1a] transition-colors text-white font-mono px-4 py-1.5 text-xs ${
+                    isDestructive ? 'text-[#FF5555]' : 'text-[#eee]'
                 }`}
             >
                 {confirmLabel}

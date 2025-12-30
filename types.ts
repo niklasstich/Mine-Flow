@@ -49,13 +49,15 @@ export interface Connection {
 
 export interface FlowState {
   nodeRates: Record<string, {
-    efficiency: number; // 0-1
+    efficiency: number; // 0-1 (Clamped)
+    saturation: number; // 0-Infinity (Unclamped ratio of input/required)
     actualOpRate: number; // operations per second
     starvedItems: string[];
     backloggedItems: string[];
   }>;
   edgeFlows: Record<string, {
     rate: number; // items per second
+    utilization: number; // 0-1 (Flow / Capacity)
     status: 'starved' | 'balanced' | 'overflow' | 'inactive' | 'bottleneck';
     itemName: string;
     requiredRate: number;

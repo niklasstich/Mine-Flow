@@ -28,6 +28,21 @@ export const getNodesInFrame = (frame: FrameData, nodes: NodeData[]): NodeData[]
   });
 };
 
+export const getFramesInFrame = (parentFrame: FrameData, allFrames: FrameData[]): FrameData[] => {
+  return allFrames.filter(frame => {
+    // Don't include self
+    if (frame.id === parentFrame.id) return false;
+
+    // Check for full containment
+    return (
+        frame.x >= parentFrame.x && 
+        frame.x + frame.w <= parentFrame.x + parentFrame.w && 
+        frame.y >= parentFrame.y && 
+        frame.y + frame.h <= parentFrame.y + parentFrame.h
+    );
+  });
+};
+
 export const calculateFrameAggregation = (
   frame: FrameData, 
   allNodes: NodeData[], 

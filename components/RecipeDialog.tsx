@@ -80,12 +80,10 @@ export const RecipeDialog: React.FC<RecipeDialogProps> = ({ node, isOpen, onClos
   };
 
   const handleSave = () => {
-    // Basic validation
     if (!recipe.processTime || recipe.processTime <= 0) {
         alert("Processing time must be greater than 0");
         return;
     }
-    
     onSave(node.id, label, recipe);
     onClose();
   };
@@ -102,6 +100,10 @@ export const RecipeDialog: React.FC<RecipeDialogProps> = ({ node, isOpen, onClos
       return time > 0 ? 1/time : 0;
   }
 
+  // Styles
+  const inputClass = "bg-[#111] border border-[#555] text-sm text-[#eee] px-2 py-1 focus:outline-none focus:border-[#aaa] font-mono";
+  const btnClass = "bg-[#3a3a3a] border border-[#555] hover:bg-[#4a4a4a] hover:border-[#fff] text-[#eee] px-3 py-1 font-mono text-xs transition-colors flex items-center gap-2";
+
   const renderItemRow = (item: ItemStack, idx: number, section: 'inputs' | 'outputs') => {
       const units = getUnitsForType(unitDictionary, item.type);
       const resourceTypes = Object.entries(unitDictionary).map(([key, val]) => ({
@@ -110,17 +112,17 @@ export const RecipeDialog: React.FC<RecipeDialogProps> = ({ node, isOpen, onClos
       }));
 
       return (
-        <div key={item.id} className="flex flex-col gap-2 bg-zinc-900/50 p-3 rounded border border-zinc-700/50">
+        <div key={item.id} className="flex flex-col gap-2 bg-[#2a2a2a] p-2 border border-[#444]">
             <div className="flex gap-2 items-center">
                 <input 
-                type="text" 
-                value={item.name}
-                onChange={(e) => handleUpdateItem(section, idx, 'name', e.target.value)}
-                className={`flex-1 bg-transparent border-b border-zinc-600 text-sm text-white focus:outline-none pb-1 ${section === 'inputs' ? 'focus:border-emerald-400' : 'focus:border-emerald-400'}`}
-                placeholder="Item Name"
+                    type="text" 
+                    value={item.name}
+                    onChange={(e) => handleUpdateItem(section, idx, 'name', e.target.value)}
+                    className={`flex-1 ${inputClass}`}
+                    placeholder="Item Name"
                 />
-                <button onClick={() => handleRemoveItem(section, idx)} className="text-red-400 hover:text-red-300 p-1">
-                <Trash2 size={14} />
+                <button onClick={() => handleRemoveItem(section, idx)} className="text-[#FF5555] hover:text-red-400 p-1">
+                    <Trash2 size={14} />
                 </button>
             </div>
             
@@ -129,27 +131,26 @@ export const RecipeDialog: React.FC<RecipeDialogProps> = ({ node, isOpen, onClos
                     <select 
                         value={item.type || 'item'}
                         onChange={(e) => handleUpdateItem(section, idx, 'type', e.target.value as ResourceType)}
-                        className="bg-zinc-800 text-xs text-zinc-300 border border-zinc-600 rounded px-1 py-1 focus:outline-none max-w-[120px]"
+                        className={`${inputClass} max-w-[120px]`}
                     >
                         {resourceTypes.map(rt => <option key={rt.type} value={rt.type}>{rt.label}</option>)}
                     </select>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">Qty:</span>
+                    <span className="text-xs text-[#888] font-mono">Qty:</span>
                     <input 
                         type="number" 
                         value={item.amount}
                         onChange={(e) => handleUpdateItem(section, idx, 'amount', parseFloat(e.target.value))}
-                        className={`w-16 bg-transparent border-b border-zinc-600 text-sm text-white focus:outline-none pb-1 text-right ${section === 'inputs' ? 'focus:border-emerald-400' : 'focus:border-emerald-400'}`}
+                        className={`w-16 ${inputClass} text-right`}
                         min="0"
                     />
                     
-                    {/* Unit Dropdown */}
                     <select
                          value={item.unit || ''}
                          onChange={(e) => handleUpdateItem(section, idx, 'unit', e.target.value)}
-                         className="bg-zinc-800 text-xs text-zinc-300 border border-zinc-600 rounded px-1 py-1 focus:outline-none w-20"
+                         className={`${inputClass} w-20`}
                     >
                         {units.map(u => (
                             <option key={u.key} value={u.key}>{u.key}</option>
@@ -162,136 +163,133 @@ export const RecipeDialog: React.FC<RecipeDialogProps> = ({ node, isOpen, onClos
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-zinc-800 border border-zinc-600 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+      <div className="bg-[#212121] border-2 border-[#555] shadow-[4px_4px_0_rgba(0,0,0,0.5)] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col font-mono">
         {/* Header */}
-        <div className="p-4 border-b border-zinc-700 flex justify-between items-center bg-zinc-900/50">
+        <div className="p-3 border-b-2 border-[#555] flex justify-between items-center bg-[#333]">
           <div className="flex items-center gap-3">
-             <div className="p-2 bg-emerald-500/20 rounded-lg">
-                <Box className="w-6 h-6 text-emerald-400" />
+             <div className="p-1.5 bg-[#444] border border-[#555]">
+                <Box className="w-5 h-5 text-[#aaa]" />
              </div>
              <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className="text-lg font-bold text-[#eee]">
                     {mode === 'prefab' ? 'Create New Machine' : (submitLabel === 'Save Machine' ? 'Edit Machine' : 'Configure Machine')}
                 </h2>
-                <p className="text-sm text-zinc-400">
-                    {mode === 'prefab' ? 'Define a new machine type for your library' : 'Define process parameters and I/O'}
-                </p>
              </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-zinc-700 rounded-full transition-colors text-zinc-400 hover:text-white">
+          <button onClick={onClose} className="p-1 hover:bg-[#555] text-[#aaa] hover:text-white transition-colors">
             <X size={20} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-8">
+        <div className="p-6 overflow-y-auto flex-1 space-y-6 custom-scrollbar">
           
           {/* Machine Name */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-300">Machine Name</label>
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-[#aaa] uppercase tracking-wider">Machine Name</label>
             <input 
               type="text" 
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
+              className={`w-full ${inputClass} p-2 text-base`}
               placeholder="e.g. Electric Furnace"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Inputs */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Inputs</h3>
-                <button onClick={() => handleAddItem('inputs')} className="text-xs flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition-colors">
-                  <Plus size={14} /> Add
+            <div className="space-y-2">
+              <div className="flex justify-between items-center border-b border-[#444] pb-1">
+                <h3 className="text-xs font-bold text-[#aaa] uppercase">Inputs</h3>
+                <button onClick={() => handleAddItem('inputs')} className="text-[#55FF55] hover:text-white text-xs flex items-center gap-1">
+                  <Plus size={12} /> Add
                 </button>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {recipe.inputs.map((item, idx) => renderItemRow(item, idx, 'inputs'))}
-                {recipe.inputs.length === 0 && <div className="text-xs text-zinc-500 italic text-center py-4">No inputs (Generator)</div>}
+                {recipe.inputs.length === 0 && <div className="text-xs text-[#555] italic text-center py-4 border border-dashed border-[#444]">No inputs (Generator)</div>}
               </div>
             </div>
 
             {/* Outputs */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Outputs</h3>
-                <button onClick={() => handleAddItem('outputs')} className="text-xs flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition-colors">
-                  <Plus size={14} /> Add
+            <div className="space-y-2">
+              <div className="flex justify-between items-center border-b border-[#444] pb-1">
+                <h3 className="text-xs font-bold text-[#aaa] uppercase">Outputs</h3>
+                <button onClick={() => handleAddItem('outputs')} className="text-[#55FF55] hover:text-white text-xs flex items-center gap-1">
+                  <Plus size={12} /> Add
                 </button>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {recipe.outputs.map((item, idx) => renderItemRow(item, idx, 'outputs'))}
-                {recipe.outputs.length === 0 && <div className="text-xs text-zinc-500 italic text-center py-4">No outputs (Sink)</div>}
+                {recipe.outputs.length === 0 && <div className="text-xs text-[#555] italic text-center py-4 border border-dashed border-[#444]">No outputs (Sink)</div>}
               </div>
             </div>
           </div>
 
           {/* Processing Time */}
-          <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-700 flex items-center gap-4">
-            <div className="p-2 bg-blue-500/20 rounded-full">
-              <Clock className="w-5 h-5 text-blue-400" />
+          <div className="bg-[#2a2a2a] p-3 border border-[#444] flex items-center gap-4">
+            <div className="p-2 bg-[#333] border border-[#444]">
+              <Clock className="w-5 h-5 text-[#aaa]" />
             </div>
             <div className="flex-1">
-              <label className="text-sm font-medium text-zinc-300 block mb-1">Processing Time</label>
+              <label className="text-xs font-bold text-[#aaa] uppercase block mb-1">Processing Time</label>
               <div className="flex items-center gap-2">
                 <input 
                   type="number"
                   value={recipe.processTime}
                   onChange={(e) => setRecipe(prev => ({ ...prev, processTime: parseFloat(e.target.value) }))}
-                  className="w-24 bg-zinc-800 border border-zinc-600 rounded px-3 py-1 text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  className={`w-24 ${inputClass}`}
                   min="0.05"
                   step="0.05"
                 />
                 <select
                     value={recipe.processTimeUnit || 'seconds'}
                     onChange={(e) => setRecipe(prev => ({ ...prev, processTimeUnit: e.target.value as TimeUnit }))}
-                    className="bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-white text-sm focus:outline-none"
+                    className={inputClass}
                 >
                     <option value="seconds">Seconds</option>
                     <option value="ticks">Ticks (1/20s)</option>
                 </select>
               </div>
             </div>
-            <div className="text-right text-zinc-400 text-sm">
-              Rate: <span className="text-white font-mono font-bold">{calculateRate().toFixed(2)}</span> ops/sec
+            <div className="text-right text-[#888] text-xs">
+              Rate: <span className="text-[#eee] font-bold">{calculateRate().toFixed(2)}</span> ops/sec
             </div>
           </div>
 
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-zinc-700 bg-zinc-900/50 flex justify-end gap-3">
+        <div className="p-3 border-t-2 border-[#555] bg-[#333] flex justify-end gap-2">
           {onDelete && (
              <button 
                 onClick={onDelete} 
-                className="px-4 py-2 rounded-lg text-red-400 hover:bg-red-900/20 border border-red-500/20 hover:border-red-500/50 transition-colors mr-auto flex items-center gap-2 text-sm"
+                className={`${btnClass} text-[#FF5555] border-[#FF5555]/30 hover:bg-[#FF5555]/20 mr-auto`}
              >
-                <Trash2 size={16} /> Delete
+                <Trash2 size={14} /> Delete
              </button>
           )}
 
           {onExport && (
              <button 
                 onClick={onExport} 
-                className="px-4 py-2 rounded-lg text-emerald-400 hover:bg-emerald-900/20 border border-emerald-500/20 hover:border-emerald-500/50 transition-colors mr-auto flex items-center gap-2 text-sm"
+                className={`${btnClass} text-[#55FF55] border-[#55FF55]/30 hover:bg-[#55FF55]/20 mr-auto`}
              >
-                <Share2 size={16} /> Share Code
+                <Share2 size={14} /> Share
              </button>
           )}
 
           {mode === 'node' && !onDelete && (
-              <button onClick={handleTemplateSave} className="px-4 py-2 rounded-lg text-emerald-300 hover:bg-emerald-900/50 border border-emerald-500/30 hover:border-emerald-500/60 transition-colors mr-auto flex items-center gap-2 text-sm">
-                <Copy size={16} /> Save as Template
+              <button onClick={handleTemplateSave} className={`${btnClass} text-[#55FFFF] border-[#55FFFF]/30 hover:bg-[#55FFFF]/20 mr-auto`}>
+                <Copy size={14} /> Save Template
               </button>
           )}
           
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-zinc-300 hover:bg-zinc-800 transition-colors">
+          <button onClick={onClose} className={btnClass}>
             Cancel
           </button>
-          <button onClick={handleSave} className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-lg shadow-emerald-500/20 transition-all active:scale-95">
+          <button onClick={handleSave} className="bg-[#3a3a3a] border-2 border-[#1a1a1a] border-t-[#505050] border-l-[#505050] hover:bg-[#4a4a4a] text-white px-6 py-1 font-mono text-xs active:border-t-[#1a1a1a] active:border-l-[#1a1a1a] active:bg-[#2a2a2a]">
             {submitLabel || (mode === 'prefab' ? 'Create Machine' : 'Save Changes')}
           </button>
         </div>
