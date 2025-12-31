@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { NodeEntity, InternalNodeStatus } from './NodeEntity';
 import { ContextMenu } from './ContextMenu';
 import { NodeContextMenu } from './NodeContextMenu';
 import { FrameContextMenu } from './FrameContextMenu';
 import { EdgeContextMenu } from './EdgeContextMenu';
+import { SearchPalette } from './SearchPalette';
 import { getEdgePath, snapToGrid, getEdgeCenter } from '../utils/geometry';
 import { calculateFrameAggregation, getNodesInFrame, getFramesInFrame, FrameAggregation } from '../utils/frameUtils';
 import { NodeData, Connection, DragItem, FlowState, Prefab, UnitDictionary, ClipboardData, FrameData, Blueprint } from '../types';
@@ -37,6 +38,8 @@ interface CanvasProps {
   setSelectedEdgeIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   selectedFrameId: string | null;
   setSelectedFrameId: React.Dispatch<React.SetStateAction<string | null>>;
+  // History
+  onCheckpoint: () => void;
 }
 
 // Helper to determine status color based on value (Matches NodeEntity logic)
@@ -107,7 +110,8 @@ export const Canvas: React.FC<CanvasProps> = ({
     onEditNode, onEditEdge, onDuplicateNode, onSaveToLibrary, onSaveFrameToLibrary, onRenameFrame, onDeleteFrame,
     prefabs, unitDictionary, isOverlayOpen,
     onDeleteCustomPrefab, collapseFrames, showEfficiency,
-    selectedNodeIds, setSelectedNodeIds, selectedEdgeIds, setSelectedEdgeIds, selectedFrameId, setSelectedFrameId
+    selectedNodeIds, setSelectedNodeIds, selectedEdgeIds, setSelectedEdgeIds, selectedFrameId, setSelectedFrameId,
+    onCheckpoint
 }) => {
   // Selection State (Moved to Props)
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -119,6 +123,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [zoom, setZoom] = useState(1);
   const [showControls, setShowControls] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   
   // Interaction State
   const [dragItem, setDragItem] = useState<DragItem>(null);
@@ -199,6 +204,180 @@ export const Canvas: React.FC<CanvasProps> = ({
           y: (clientY - rect.top - pan.y) / zoom
       };
   };
+
+  const centerOnNode = (nodeId: string) => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return;
+      
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      
+      // Calculate pan to center the node
+      // Canvas logic: transform = translate(pan.x, pan.y) scale(zoom)
+      // ScreenCenter = (node.x * zoom) + pan.x
+      // pan.x = ScreenCenter - (node.x * zoom)
+      
+      const screenCenterX = rect.width / 2;
+      const screenCenterY = rect.height / 2;
+      
+      const newPanX = screenCenterX - (node.x + (node.width||220)/2) * zoom;
+      const newPanY = screenCenterY - (node.y + (node.height||150)/2) * zoom;
+      
+      setPan({ x: newPanX, y: newPanY });
+      setSelectedNodeIds(new Set([nodeId]));
+      setSelectedFrameId(null);
+  };
+
+  // --- Logic for Actions ---
+
+  const performCopy = useCallback(() => {
+    let nodesToCopy: NodeData[] = [];
+    nodesToCopy = nodes.filter(n => selectedNodeIds.has(n.id));
+    
+    // If a frame is selected, copy contents
+    if (selectedFrameId) {
+       // Logic for frame copy could be complex, for now copy focused frame logic is tricky without explicit node selection
+       // Simply ignore frame copy for clipboard shortcut for now, or implement frame copy later
+    }
+
+    if (nodesToCopy.length === 0) return;
+    const ids = new Set(nodesToCopy.map(n => n.id));
+    const edgesToCopy = edges.filter(e => ids.has(e.sourceNodeId) && ids.has(e.targetNodeId));
+    setClipboard({ nodes: nodesToCopy, edges: edgesToCopy });
+  }, [nodes, edges, selectedNodeIds, selectedFrameId]);
+
+  const performDelete = useCallback(() => {
+    if (selectedNodeIds.size === 0 && selectedEdgeIds.size === 0 && !selectedFrameId) return;
+    
+    onCheckpoint();
+
+    if (selectedFrameId) {
+        onDeleteFrame(selectedFrameId);
+        setSelectedFrameId(null);
+        return; // Frame delete handles its own confirm logic, but we called checkpoint already
+    }
+
+    const idsToDelete = new Set([...selectedNodeIds]);
+    setNodes(prev => prev.filter(n => !idsToDelete.has(n.id)));
+    setEdges(prev => prev.filter(e => 
+        !idsToDelete.has(e.sourceNodeId) && 
+        !idsToDelete.has(e.targetNodeId) && 
+        !selectedEdgeIds.has(e.id)
+    ));
+    setSelectedNodeIds(new Set());
+    setSelectedEdgeIds(new Set());
+  }, [selectedNodeIds, selectedEdgeIds, selectedFrameId, onDeleteFrame, onCheckpoint]);
+
+  const performPaste = useCallback(() => {
+      if (!clipboard) return;
+      // Paste at mouse center or screen center?
+      // For shortcuts, screen center is safer if mouse position isn't tracked globally
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const centerX = rect ? (rect.width/2 - pan.x)/zoom : 0;
+      const centerY = rect ? (rect.height/2 - pan.y)/zoom : 0;
+
+      onCheckpoint();
+
+      const { nodes: clipNodes, edges: clipEdges } = clipboard;
+      if(clipNodes.length === 0) return;
+      const minX = Math.min(...clipNodes.map(n => n.x));
+      const minY = Math.min(...clipNodes.map(n => n.y));
+      
+      const idMap = new Map<string, string>();
+      const newNodes = clipNodes.map(n => {
+          const newId = crypto.randomUUID();
+          idMap.set(n.id, newId);
+          return {
+              ...n,
+              id: newId,
+              x: n.x - minX + centerX,
+              y: n.y - minY + centerY,
+              recipe: {
+                  ...n.recipe,
+                  inputs: n.recipe.inputs.map(i => ({...i, id: crypto.randomUUID()})),
+                  outputs: n.recipe.outputs.map(o => ({...o, id: crypto.randomUUID()}))
+              }
+          };
+      });
+      const newEdges = clipEdges.map(e => ({
+          ...e,
+          id: crypto.randomUUID(),
+          sourceNodeId: idMap.get(e.sourceNodeId)!,
+          targetNodeId: idMap.get(e.targetNodeId)!
+      }));
+      setNodes(prev => [...prev, ...newNodes]);
+      setEdges(prev => [...prev, ...newEdges]);
+      setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
+  }, [clipboard, pan, zoom, onCheckpoint]);
+
+  const performDuplicate = useCallback(() => {
+      if (selectedNodeIds.size === 0) return;
+      
+      onCheckpoint();
+      
+      const nodesToDup = nodes.filter(n => selectedNodeIds.has(n.id));
+      const idMap = new Map<string, string>();
+      const newNodes = nodesToDup.map(n => {
+          const newId = crypto.randomUUID();
+          idMap.set(n.id, newId);
+          // Deep copy recipe
+          const newRecipe = JSON.parse(JSON.stringify(n.recipe));
+          newRecipe.inputs = newRecipe.inputs.map((i: any) => ({ ...i, id: crypto.randomUUID() }));
+          newRecipe.outputs = newRecipe.outputs.map((o: any) => ({ ...o, id: crypto.randomUUID() }));
+
+          return {
+              ...n,
+              id: newId,
+              x: n.x + 20,
+              y: n.y + 20,
+              label: `${n.label} (Copy)`,
+              recipe: newRecipe
+          };
+      });
+
+      setNodes(prev => [...prev, ...newNodes]);
+      setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
+  }, [nodes, selectedNodeIds, onCheckpoint]);
+
+
+  // --- Keyboard Listeners ---
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (isOverlayOpen || isSearchOpen) return;
+        
+        // Input protection
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+        // Copy
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+            performCopy();
+        }
+        // Paste
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+            performPaste();
+        }
+        // Duplicate
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+            e.preventDefault(); // Prevent bookmark
+            performDuplicate();
+        }
+        // Delete
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            performDelete();
+        }
+        // Search
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault(); // Prevent browser search focus
+            setIsSearchOpen(true);
+        }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOverlayOpen, isSearchOpen, performCopy, performPaste, performDelete, performDuplicate]);
+
 
   // --- Handlers ---
 
@@ -302,6 +481,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const handleDeleteEdge = () => {
       if (!edgeContextMenu) return;
+      onCheckpoint();
       setEdges(prev => prev.filter(e => e.id !== edgeContextMenu.edgeId));
       setEdgeContextMenu(null);
   };
@@ -314,6 +494,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handleAddPrefab = (prefab: Prefab, position?: { x: number, y: number }) => {
+    onCheckpoint();
     let targetX = 0;
     let targetY = 0;
     if (position) {
@@ -342,6 +523,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const handleAddBlueprint = (blueprint: Blueprint, position: { x: number, y: number }) => {
      if (blueprint.nodes.length === 0) return;
+     onCheckpoint();
      const minX = Math.min(...blueprint.nodes.map(n => n.x));
      const minY = Math.min(...blueprint.nodes.map(n => n.y));
      const offsetX = position.x - minX;
@@ -388,6 +570,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const handleAddFrame = () => {
       if (!contextMenu) return;
+      onCheckpoint();
       const newFrame: FrameData = {
           id: crypto.randomUUID(),
           label: "New Frame",
@@ -404,41 +587,35 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const handleCopy = () => {
       if(!nodeContextMenu) return;
-      let nodesToCopy: NodeData[] = [];
-      nodesToCopy = nodes.filter(n => selectedNodeIds.has(n.id));
-      const ids = new Set(nodesToCopy.map(n => n.id));
-      const edgesToCopy = edges.filter(e => ids.has(e.sourceNodeId) && ids.has(e.targetNodeId));
-      setClipboard({ nodes: nodesToCopy, edges: edgesToCopy });
+      performCopy();
       setNodeContextMenu(null);
   };
 
   const handleCut = () => {
       if(!nodeContextMenu) return;
-      handleCopy();
-      const idsToDelete = new Set([...selectedNodeIds]);
-      setNodes(prev => prev.filter(n => !idsToDelete.has(n.id)));
-      setEdges(prev => prev.filter(e => !idsToDelete.has(e.sourceNodeId) && !idsToDelete.has(e.targetNodeId)));
-      setSelectedNodeIds(new Set());
+      performCopy();
+      performDelete();
       setNodeContextMenu(null);
   };
 
   const handleDelete = () => {
       if(!nodeContextMenu) return;
-      const idsToDelete = new Set([...selectedNodeIds]);
-      setNodes(prev => prev.filter(n => !idsToDelete.has(n.id)));
-      setEdges(prev => prev.filter(e => !idsToDelete.has(e.sourceNodeId) && !idsToDelete.has(e.targetNodeId)));
-      setSelectedNodeIds(new Set());
+      performDelete();
       setNodeContextMenu(null);
   }
   
   const handleDeleteFrame = () => {
       if (!frameContextMenu) return;
+      onCheckpoint(); // Explicit checkpoint for frame deletion via context menu
       onDeleteFrame(frameContextMenu.frameId);
       setFrameContextMenu(null);
   }
 
   const handlePaste = () => {
       if(!clipboard || !contextMenu) return;
+      
+      onCheckpoint();
+
       const { nodes: clipNodes, edges: clipEdges } = clipboard;
       if(clipNodes.length === 0) return;
       const minX = Math.min(...clipNodes.map(n => n.x));
@@ -623,6 +800,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     );
 
     if (!exists) {
+        onCheckpoint();
         setEdges(prev => [...prev, {
             id: crypto.randomUUID(),
             sourceNodeId: outputId,
@@ -739,6 +917,14 @@ export const Canvas: React.FC<CanvasProps> = ({
         setSelectedEdgeIds(newSelectedEdges);
         setSelectionBox(null);
     }
+    
+    // Checkpoint on Drag End for Nodes/Frames if they moved
+    if (dragItem?.type === 'node' || dragItem?.type === 'frame' || dragItem?.type === 'resize_frame') {
+        // Simple check: if dragging occurred, lastMousePosRef won't be null (mostly) and we can assume a change
+        // Ideally we check if startX/Y !== current x/y but we updated state directly.
+        onCheckpoint();
+    }
+    
     if (dragItem?.type === 'node') {
         setNodes(prev => prev.map(n => {
             if (selectedNodeIds.has(n.id)) {
@@ -832,6 +1018,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
       onDrop={(e) => {
         e.preventDefault();
+        onCheckpoint();
         const prefabData = e.dataTransfer.getData('application/mineflow-prefab');
         const blueprintData = e.dataTransfer.getData('application/mineflow-blueprint');
         const coords = getCanvasCoords(e.clientX, e.clientY);
@@ -1089,6 +1276,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                              if (frames.some(f => f.id === node.id)) {
                                 onDeleteFrame(node.id);
                              } else {
+                                onCheckpoint();
                                 setNodes(prev => prev.filter(n => n.id !== node.id));
                                 setEdges(prev => prev.filter(e => e.sourceNodeId !== node.id && e.targetNodeId !== node.id));
                              }
@@ -1163,6 +1351,13 @@ export const Canvas: React.FC<CanvasProps> = ({
             />
         )}
         
+        <SearchPalette 
+          isOpen={isSearchOpen} 
+          onClose={() => setIsSearchOpen(false)}
+          nodes={nodes}
+          onSelectNode={centerOnNode}
+        />
+
         <div className="absolute bottom-6 left-6 z-50 pointer-events-auto flex flex-col gap-1 bg-zinc-900 border border-zinc-700 p-1 shadow-xl">
             <button onClick={() => setZoom(z => Math.min(z * 1.2, 5))} className="p-2 hover:bg-zinc-700 text-zinc-300 hover:text-white" title="Zoom In"><ZoomIn size={20}/></button>
             <div className="text-[10px] text-center text-zinc-500 font-mono">{Math.round(zoom * 100)}%</div>
@@ -1183,10 +1378,14 @@ export const Canvas: React.FC<CanvasProps> = ({
                     
                     <h5 className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Controls</h5>
                     <p className="text-[10px] text-zinc-400 mb-3 leading-relaxed">
-                        <span className="text-zinc-300">Space + Drag</span> to Pan.<br/>
+                        <span className="text-zinc-300">Middle Mouse</span> to Pan.<br/>
                         <span className="text-zinc-300">Wheel</span> to Zoom.<br/>
                         <span className="text-zinc-300">Right Click</span> Context Menu.<br/>
-                        <span className="text-zinc-300">Drag Bkg</span> to Select Area.<br/>
+                        <span className="text-zinc-300">Ctrl+C/V</span> Copy/Paste.<br/>
+                        <span className="text-zinc-300">Ctrl+Z/Y</span> Undo/Redo.<br/>
+                        <span className="text-zinc-300">Ctrl+D</span> Duplicate.<br/>
+                        <span className="text-zinc-300">Ctrl+K</span> Search.<br/>
+                        <span className="text-zinc-300">Del</span> Delete Selection.<br/>
                     </p>
                 </div>
             ) : (

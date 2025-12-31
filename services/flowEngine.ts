@@ -31,13 +31,45 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     outputConnections[e.sourceNodeId][e.sourceSocketIdx].push(e.id);
   });
 
+  // Pre-calculate Edge Demands (Target Requirement in Base Units)
+  const edgeDemandMap = new Map<string, number>(); // edgeId -> demandRate (base units)
+  const socketTotalDemandMap = new Map<string, number>(); // "nodeId-socketIdx" -> totalDemand (base units)
+
+  nodes.forEach(node => {
+      // For each output socket, sum demands of connected edges
+      node.recipe.outputs.forEach((_, socketIdx) => {
+          const connectedEdgeIds = outputConnections[node.id][socketIdx] || [];
+          let totalDemand = 0;
+
+          connectedEdgeIds.forEach(edgeId => {
+              const edge = edgeMap.get(edgeId);
+              if (!edge) return;
+              const targetNode = nodeMap.get(edge.targetNodeId);
+              if (!targetNode) return;
+              
+              const input = targetNode.recipe.inputs[edge.targetSocketIdx];
+              if (!input) return;
+
+              const timeFactor = getConversionFactor(unitDictionary, 'time', targetNode.recipe.processTimeUnit || 'seconds');
+              const time = targetNode.recipe.processTime * timeFactor;
+              const maxOpRate = time > 0 ? 1 / time : 0;
+
+              const inputFactor = getConversionFactor(unitDictionary, input.type, input.unit);
+              const demandRate = maxOpRate * input.amount * inputFactor;
+
+              edgeDemandMap.set(edgeId, demandRate);
+              totalDemand += demandRate;
+          });
+
+          socketTotalDemandMap.set(`${node.id}-${socketIdx}`, totalDemand);
+      });
+  });
+
   // Iterative approach to solve for feedback loops and input saturation
   for (let pass = 0; pass < 5; pass++) {
     nodes.forEach(node => {
       const recipe = node.recipe;
       
-      // Calculate time in seconds using the 'time' resource type from dictionary
-      // Defaults to 1 (factor) if 'time' type or unit is missing, effectively treating undefined as base unit
       const timeFactor = getConversionFactor(unitDictionary, 'time', recipe.processTimeUnit || 'seconds');
       const timeInSeconds = recipe.processTime * timeFactor;
       
@@ -63,20 +95,32 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
             const sourceRate = nodeRates[edge.sourceNodeId]?.actualOpRate || 0;
             if (sourceNode) {
               const outputStack = sourceNode.recipe.outputs[edge.sourceSocketIdx];
-              const connectedEdges = outputConnections[edge.sourceNodeId][edge.sourceSocketIdx] || [];
-              const splitFactor = connectedEdges.length || 1;
               
               if (outputStack) {
-                 // Calculate Raw Flow (in Source Units)
-                 const rawFlowSourceUnits = (sourceRate * outputStack.amount) / splitFactor;
-                 
-                 // Normalize Source Flow to Base Unit
                  const sourceFactor = getConversionFactor(unitDictionary, outputStack.type, outputStack.unit);
-                 const rawFlowNormalized = rawFlowSourceUnits * sourceFactor;
+                 const totalOutputBase = (sourceRate * outputStack.amount) * sourceFactor;
 
-                 // Apply Pipe Capacity Limit (Assume pipe capacity is unit-agnostic or set in Base Units)
+                 const myDemand = edgeDemandMap.get(edgeId) || 0;
+                 const totalSocketDemand = socketTotalDemandMap.get(`${sourceNode.id}-${edge.sourceSocketIdx}`) || 0;
+                 
+                 let allocatedFlowBase = 0;
+                 
+                 if (totalSocketDemand > 0) {
+                     if (totalOutputBase >= totalSocketDemand) {
+                         // Sufficient output: satisfy demand
+                         allocatedFlowBase = myDemand;
+                     } else {
+                         // Insufficient output: proportional split
+                         allocatedFlowBase = totalOutputBase * (myDemand / totalSocketDemand);
+                     }
+                 } else {
+                     // No demand (e.g. target is off or invalid).
+                     allocatedFlowBase = 0;
+                 }
+
+                 // Apply Pipe Capacity Limit
                  const capacity = edge.capacity > 0 ? edge.capacity : Infinity;
-                 const actualPipeFlow = Math.min(rawFlowNormalized, capacity);
+                 const actualPipeFlow = Math.min(allocatedFlowBase, capacity);
                  
                  totalIncomingRate += actualPipeFlow;
               }
@@ -96,7 +140,6 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
       });
 
       const efficiency = Math.max(0, Math.min(1, limitingRatio));
-      // Saturation is the unclamped ratio. If generator (no inputs), saturation is ideal (1.0)
       const saturation = recipe.inputs.length === 0 ? 1.0 : limitingRatio; 
 
       nodeRates[node.id] = {
@@ -122,56 +165,53 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     if (!sourceNode) return;
     const sourceOpRate = nodeRates[sourceNode.id].actualOpRate;
     const outputStack = sourceNode.recipe.outputs[edge.sourceSocketIdx];
-    const connectedEdges = outputConnections[edge.sourceNodeId][edge.sourceSocketIdx] || [];
-    const splitFactor = connectedEdges.length || 1;
     
-    // Normalization Factors
     const sourceFactor = getConversionFactor(unitDictionary, outputStack.type, outputStack.unit);
     const inputFactor = getConversionFactor(unitDictionary, inputStack.type, inputStack.unit);
 
-    // 1. Supply: What the source is pushing
-    const rawFlowNormalized = ((sourceOpRate * outputStack.amount) / splitFactor) * sourceFactor;
+    // 1. Supply Calculation (using proportional demand logic)
+    const totalOutputBase = (sourceOpRate * outputStack.amount) * sourceFactor;
+    const myDemand = edgeDemandMap.get(edge.id) || 0;
+    const totalSocketDemand = socketTotalDemandMap.get(`${sourceNode.id}-${edge.sourceSocketIdx}`) || 0;
     
-    // 2. Capacity: What the pipe can handle
+    let allocatedSupplyBase = 0;
+    if (totalSocketDemand > 0) {
+         if (totalOutputBase >= totalSocketDemand) {
+             allocatedSupplyBase = myDemand;
+         } else {
+             allocatedSupplyBase = totalOutputBase * (myDemand / totalSocketDemand);
+         }
+    }
+    
+    // 2. Capacity
     const capacityLimit = edge.capacity > 0 ? edge.capacity : Infinity;
 
-    // 3. Demand: What the target actually consumes (Backpressure)
-    // We use the target's actualOpRate which accounts for ITS inputs availability.
-    // If target is stopped (rate 0), demand is 0.
+    // 3. Backpressure (Actual Consumption)
+    // The target consumes based on its actualOpRate.
     const targetOpRate = nodeRates[targetNode.id]?.actualOpRate || 0;
     const targetConsumptionNormalized = targetOpRate * inputStack.amount * inputFactor;
 
-    // Actual Flow is limited by the strict minimum of Supply, Capacity, and Demand
-    const actualFlowNormalized = Math.min(rawFlowNormalized, capacityLimit, targetConsumptionNormalized);
+    // Actual Flow
+    const actualFlowNormalized = Math.min(allocatedSupplyBase, capacityLimit, targetConsumptionNormalized);
 
-    // Max Potential Demand (for Starvation check)
-    // Use dictionary for time conversion
-    const targetTimeFactor = getConversionFactor(unitDictionary, 'time', targetNode.recipe.processTimeUnit || 'seconds');
-    const targetTimeInSeconds = targetNode.recipe.processTime * targetTimeFactor;
-
-    const maxTargetOpRate = targetTimeInSeconds > 0 ? 1 / targetTimeInSeconds : 0;
-    const requiredFlowNormalized = maxTargetOpRate * (inputStack.amount * inputFactor);
+    // Required Rate (Potential Demand)
+    const requiredFlowNormalized = myDemand; // Already calculated as Target Max Op Rate * Amount
 
     let status: FlowState['edgeFlows'][string]['status'] = 'balanced';
-    
     const EPSILON = 0.0001;
 
     // Determine Status
-    if (rawFlowNormalized > capacityLimit + EPSILON) {
-        status = 'bottleneck'; // Pipe limited
-    } else if (rawFlowNormalized > targetConsumptionNormalized + EPSILON) {
-        status = 'overflow'; // Backed up at destination
+    if (allocatedSupplyBase > capacityLimit + EPSILON) {
+        status = 'bottleneck'; // Pipe is smaller than what is allocated/available
+    } else if (allocatedSupplyBase > targetConsumptionNormalized + EPSILON) {
+        status = 'overflow'; // Source is providing more than target is eating (Backpressure)
     } else if (actualFlowNormalized < requiredFlowNormalized - EPSILON) {
-        // If we are delivering less than MAX demand, we are effectively starving the machine of full potential
-        // But only if supply is the issue. If demand is low (target stopped), it's not 'starved' by this edge.
-        
-        if (actualFlowNormalized >= rawFlowNormalized - EPSILON) {
-             status = 'starved'; // Supply limited
+        // Delivering less than needed
+        if (actualFlowNormalized >= allocatedSupplyBase - EPSILON) {
+             status = 'starved'; // Supply limited (Source didn't give enough)
         } else {
-             status = 'balanced'; // Demand limited (not starved by this edge)
+             status = 'balanced'; // Demand limited (Target isn't asking for more due to internal throttle?) 
         }
-    } else {
-        status = 'balanced';
     }
 
     // Convert back to Source Units for display
@@ -179,7 +219,6 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
     const displayCapacity = capacityLimit === Infinity ? -1 : capacityLimit / sourceFactor;
     const displayRequired = requiredFlowNormalized / sourceFactor;
     
-    // Calculate Utilization
     const utilization = capacityLimit === Infinity ? 0 : actualFlowNormalized / capacityLimit;
 
     edgeFlows[edge.id] = {
@@ -188,13 +227,13 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
       status,
       itemName: inputStack.name,
       requiredRate: displayRequired,
-      capacity: displayCapacity // Return capacity in Display Units
+      capacity: displayCapacity
     };
   });
 
   // Post-Calculation: Determine Output Flow Ratios (Efficiency of Outputs)
   nodes.forEach(node => {
-      if (node.recipe.outputs.length === 0) return; // Sinks are always efficient output-wise
+      if (node.recipe.outputs.length === 0) return; 
 
       let totalProduced = 0;
       let totalFlowing = 0;
@@ -206,23 +245,19 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
           totalProduced += produced;
 
           // Flowing out (in Base Units)
-          // Sum of all edges connected to this output
           const edgeIds = outputConnections[node.id]?.[idx] || [];
           edgeIds.forEach(eid => {
               const edge = edgeMap.get(eid);
               const flow = edgeFlows[eid];
               if (edge && flow) {
-                   // flow.rate is in Source Units (displayRate), convert to Base
                    totalFlowing += flow.rate * outFactor;
               }
           });
       });
 
-      // Avoid division by zero. If produced is 0, machine is off, so output isn't blocked.
       const ratio = totalProduced > 1e-9 ? totalFlowing / totalProduced : 1.0;
       
       if (nodeRates[node.id]) {
-          // Clamp to 0-1. Slight fp errors might make it > 1.
           nodeRates[node.id].outputFlowRatio = Math.min(1.0, Math.max(0, ratio));
       }
   });

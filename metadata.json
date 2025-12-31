@@ -1,5 +1,5 @@
 {
-  "name": "MineFlow After Post",
+  "name": "Mineflow with Chat Suggestions",
   "description": "A chemical engineering-style process flow diagram tool for Minecraft automation chains. Calculate rates, identify bottlenecks, and optimize your factory layouts.",
   "requestFramePermissions": []
 }

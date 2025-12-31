@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Canvas } from './components/Canvas';
 import { RecipeDialog } from './components/RecipeDialog';
 import { ConnectionDialog } from './components/ConnectionDialog';
@@ -13,7 +13,7 @@ import { DEFAULT_RECIPE, PREFABS } from './constants';
 import { DEFAULT_UNIT_DICTIONARY } from './services/unitDictionary';
 import { generateDiagramString, generatePrefabString, parseImportString, DiagramData } from './utils/io';
 import { getNodesInFrame } from './utils/frameUtils';
-import { Plus, Book, Box, Share2, Upload } from 'lucide-react';
+import { Plus, Book, Box, Share2, Upload, Undo2, Redo2 } from 'lucide-react';
 
 // Bedrock UI Components
 const BedrockButton = ({ onClick, children, className = "", title = "" }: { onClick?: () => void, children?: React.ReactNode, className?: string, title?: string }) => (
@@ -61,6 +61,13 @@ const BedrockToggle = ({ checked, onChange, label }: { checked: boolean, onChang
   </div>
 );
 
+// History Types
+interface HistoryState {
+    nodes: NodeData[];
+    edges: Connection[];
+    frames: FrameData[];
+}
+
 export default function App() {
   // Canvas State - Loaded from LocalStorage
   const [nodes, setNodes] = useState<NodeData[]>(() => {
@@ -81,6 +88,85 @@ export default function App() {
           return saved ? JSON.parse(saved) : [];
       } catch (e) { return []; }
   });
+
+  // History State
+  const [history, setHistory] = useState<{ past: HistoryState[], future: HistoryState[] }>({
+      past: [],
+      future: []
+  });
+
+  // Create a checkpoint of the current state before modification
+  const handleCheckpoint = useCallback(() => {
+    setHistory(prev => {
+        const newPast = [...prev.past, { nodes, edges, frames }];
+        // Limit history to 50 steps
+        if (newPast.length > 50) newPast.shift();
+        return {
+            past: newPast,
+            future: [] // Clear future on new action
+        };
+    });
+  }, [nodes, edges, frames]);
+
+  const handleUndo = useCallback(() => {
+    setHistory(prev => {
+        if (prev.past.length === 0) return prev;
+        const previous = prev.past[prev.past.length - 1];
+        const newPast = prev.past.slice(0, -1);
+        
+        setNodes(previous.nodes);
+        setEdges(previous.edges);
+        setFrames(previous.frames);
+
+        return {
+            past: newPast,
+            future: [{ nodes, edges, frames }, ...prev.future]
+        };
+    });
+  }, [nodes, edges, frames]);
+
+  const handleRedo = useCallback(() => {
+      setHistory(prev => {
+          if (prev.future.length === 0) return prev;
+          const next = prev.future[0];
+          const newFuture = prev.future.slice(1);
+
+          setNodes(next.nodes);
+          setEdges(next.edges);
+          setFrames(next.frames);
+
+          return {
+              past: [...prev.past, { nodes, edges, frames }],
+              future: newFuture
+          };
+      });
+  }, [nodes, edges, frames]);
+
+  // Global Keyboard Listeners for Undo/Redo
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          // Ignore if typing in input/textarea
+          const target = e.target as HTMLElement;
+          if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+              if (e.shiftKey) {
+                  e.preventDefault();
+                  handleRedo();
+              } else {
+                  e.preventDefault();
+                  handleUndo();
+              }
+          } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+              e.preventDefault();
+              handleRedo();
+          }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
 
   // Selection State
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
@@ -201,6 +287,7 @@ export default function App() {
   };
 
   const handleAddNode = () => {
+    handleCheckpoint();
     const id = crypto.randomUUID();
     const newNode: NodeData = {
       id,
@@ -213,6 +300,7 @@ export default function App() {
   };
 
   const handleDuplicateNode = (nodeId: string) => {
+    handleCheckpoint();
     const original = nodes.find(n => n.id === nodeId);
     if (!original) return;
 
@@ -242,6 +330,7 @@ export default function App() {
   }
 
   const handleSaveRecipe = (nodeId: string, newLabel: string, newRecipe: Recipe) => {
+    handleCheckpoint();
     setNodes(prev => prev.map(n => 
       n.id === nodeId ? { ...n, label: newLabel, recipe: newRecipe } : n
     ));
@@ -255,6 +344,7 @@ export default function App() {
   };
   
   const handleSaveConnection = (edgeId: string, capacity: number) => {
+      handleCheckpoint();
       setEdges(prev => prev.map(e => 
         e.id === edgeId ? { ...e, capacity } : e
       ));
@@ -325,6 +415,7 @@ export default function App() {
       if (!newName.trim()) return;
       
       if (renameState.type === 'frame') {
+          handleCheckpoint();
           setFrames(prev => prev.map(f => f.id === renameState.id ? { ...f, label: newName.trim() } : f));
       } else if (renameState.type === 'blueprint') {
           setBlueprints(prev => prev.map(b => b.id === renameState.id ? { ...b, label: newName.trim() } : b));
@@ -401,6 +492,7 @@ export default function App() {
           title: "Delete Frame & Contents",
           message: `Are you sure you want to delete "${frame.label}"? This will also remove ${count} machine${count !== 1 ? 's' : ''} currently inside it.`,
           onConfirm: () => {
+              handleCheckpoint();
               // 1. Identify nodes to remove
               const nodeIdsToRemove = new Set(containedNodes.map(n => n.id));
               
@@ -523,6 +615,7 @@ export default function App() {
               title: "Replace Diagram?",
               message: "This will replace your current diagram with the imported one. All unsaved changes to the current diagram will be lost.",
               onConfirm: () => {
+                  handleCheckpoint();
                   setNodes(d.nodes || []);
                   setEdges(d.edges || []);
                   setFrames(d.frames || []);
@@ -581,6 +674,25 @@ export default function App() {
         
         <div className="flex items-center gap-4">
           
+          <div className="flex gap-1 mr-2">
+            <button 
+                onClick={handleUndo} 
+                disabled={history.past.length === 0}
+                className="p-2 text-[#aaa] hover:text-white disabled:opacity-30 transition-colors"
+                title="Undo (Ctrl+Z)"
+            >
+                <Undo2 size={18} />
+            </button>
+            <button 
+                onClick={handleRedo} 
+                disabled={history.future.length === 0}
+                className="p-2 text-[#aaa] hover:text-white disabled:opacity-30 transition-colors"
+                title="Redo (Ctrl+Y)"
+            >
+                <Redo2 size={18} />
+            </button>
+          </div>
+
           <BedrockToggle 
             checked={showEfficiency} 
             onChange={setShowEfficiency} 
@@ -662,6 +774,7 @@ export default function App() {
                 setSelectedEdgeIds={setSelectedEdgeIds}
                 selectedFrameId={selectedFrameId}
                 setSelectedFrameId={setSelectedFrameId}
+                onCheckpoint={handleCheckpoint}
             />
         </div>
         
