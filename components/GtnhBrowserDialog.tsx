@@ -43,7 +43,7 @@ function useGtnhCatalog(isOpen: boolean) {
         if (!version) throw new Error('No GTNH data versions available.');
         const loaded = await fetchGtnhCatalog(version);
         setCatalog(loaded);
-        setAtlasUrl(`/gtnh-data/${version}/${manifest.versions[version].atlasFile}`);
+        setAtlasUrl(`${import.meta.env.BASE_URL}gtnh-data/${version}/${manifest.versions[version].atlasFile}`);
       } catch (e: any) {
         setError(e?.message ?? 'Failed to load GTNH data.');
       } finally {

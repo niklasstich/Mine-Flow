@@ -42,7 +42,7 @@ export type ResolvedGoods =
   | { kind: "fluid"; goods: PortableFluid }
   | { kind: "oreDict"; goods: PortableOreDict };
 
-const GTNH_DATA_BASE = "/gtnh-data";
+const GTNH_DATA_BASE = `${import.meta.env.BASE_URL}gtnh-data`;
 
 const manifestCache: { promise: Promise<GtnhManifest> | null } = { promise: null };
 const catalogCache = new Map<string, Promise<GtnhCatalog>>();

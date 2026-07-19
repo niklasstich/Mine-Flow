@@ -1,5 +1,6 @@
 import path from "path";
 import { defineConfig } from "vite";
+/// <reference types="vitest/config" />
 import { configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
