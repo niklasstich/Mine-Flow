@@ -5,10 +5,12 @@ import { NodeContextMenu } from './NodeContextMenu';
 import { FrameContextMenu } from './FrameContextMenu';
 import { EdgeContextMenu } from './EdgeContextMenu';
 import { SearchPalette } from './SearchPalette';
-import { getEdgePath, snapToGrid, getEdgeCenter } from '../utils/geometry';
+import { getEdgePath, snapToGrid, getEdgeCenter, clampNodeSize, computeMinNodeHeight } from '../utils/geometry';
 import { calculateFrameAggregation, getNodesInFrame, getFramesInFrame, FrameAggregation } from '../utils/frameUtils';
 import { NodeData, Connection, DragItem, FlowState, Prefab, UnitDictionary, ClipboardData, FrameData, Blueprint } from '../types';
 import { calculateFlows } from '../services/flowEngine';
+import { MIN_NODE_WIDTH, MIN_NODE_HEIGHT } from '../constants';
+import { GtnhCatalog } from '../services/gtnhCatalog';
 import { Info, X, ZoomIn, ZoomOut, Move } from 'lucide-react';
 
 interface CanvasProps {
@@ -40,6 +42,9 @@ interface CanvasProps {
   setSelectedFrameId: React.Dispatch<React.SetStateAction<string | null>>;
   // History
   onCheckpoint: () => void;
+  // GTNH item icons (resolved lazily app-wide once any node carries GTNH data)
+  gtnhCatalog?: GtnhCatalog | null;
+  gtnhAtlasUrl?: string | null;
 }
 
 // Helper to determine status color based on value (Matches NodeEntity logic)
@@ -111,7 +116,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     prefabs, unitDictionary, isOverlayOpen,
     onDeleteCustomPrefab, collapseFrames, showEfficiency,
     selectedNodeIds, setSelectedNodeIds, selectedEdgeIds, setSelectedEdgeIds, selectedFrameId, setSelectedFrameId,
-    onCheckpoint
+    onCheckpoint, gtnhCatalog, gtnhAtlasUrl
 }) => {
   // Selection State (Moved to Props)
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -677,6 +682,22 @@ export const Canvas: React.FC<CanvasProps> = ({
       });
   };
 
+  const handleNodeResizeStart = (e: React.MouseEvent, node: NodeData, handle: string) => {
+      e.stopPropagation();
+      const coords = getCanvasCoords(e.clientX, e.clientY);
+      const ioRowCount = Math.max(node.recipe.inputs.length, node.recipe.outputs.length);
+      setDragItem({
+          type: 'resize_node',
+          id: node.id,
+          handle,
+          startX: coords.x,
+          startY: coords.y,
+          startW: node.width || 240,
+          startH: node.height || 150,
+          minH: Math.max(MIN_NODE_HEIGHT, computeMinNodeHeight(ioRowCount))
+      });
+  };
+
   const handleNodeMouseDown = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (contextMenu) setContextMenu(null);
@@ -891,6 +912,15 @@ export const Canvas: React.FC<CanvasProps> = ({
             return { ...f, x: newX, y: newY, w: newW, h: newH };
         }));
     }
+
+    if (dragItem.type === 'resize_node') {
+        const dx = coords.x - dragItem.startX;
+        const dy = coords.y - dragItem.startY;
+        if (dragItem.handle === 'se') {
+            const { width, height } = clampNodeSize(dragItem.startW, dragItem.startH, dx, dy, MIN_NODE_WIDTH, dragItem.minH);
+            setNodes(prev => prev.map(n => n.id === dragItem.id ? { ...n, width, height } : n));
+        }
+    }
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
@@ -919,12 +949,12 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
     
     // Checkpoint on Drag End for Nodes/Frames if they moved
-    if (dragItem?.type === 'node' || dragItem?.type === 'frame' || dragItem?.type === 'resize_frame') {
+    if (dragItem?.type === 'node' || dragItem?.type === 'frame' || dragItem?.type === 'resize_frame' || dragItem?.type === 'resize_node') {
         // Simple check: if dragging occurred, lastMousePosRef won't be null (mostly) and we can assume a change
         // Ideally we check if startX/Y !== current x/y but we updated state directly.
         onCheckpoint();
     }
-    
+
     if (dragItem?.type === 'node') {
         setNodes(prev => prev.map(n => {
             if (selectedNodeIds.has(n.id)) {
@@ -932,6 +962,16 @@ export const Canvas: React.FC<CanvasProps> = ({
             }
             return n;
         }));
+    }
+    if (dragItem?.type === 'resize_node') {
+        setNodes(prev => prev.map(n => n.id === dragItem.id
+            ? {
+                ...n,
+                width: Math.max(MIN_NODE_WIDTH, snapToGrid(n.width || MIN_NODE_WIDTH)),
+                height: Math.max(dragItem.minH, snapToGrid(n.height || dragItem.minH))
+            }
+            : n
+        ));
     }
     if (dragItem?.type === 'frame' || dragItem?.type === 'resize_frame') {
         setFrames(prev => prev.map(f => ({
@@ -1284,10 +1324,13 @@ export const Canvas: React.FC<CanvasProps> = ({
                         onSocketMouseDown={(e, sIdx, isInput) => handleSocketMouseDown(e, node.id, sIdx, isInput)}
                         onSocketMouseUp={(e, sIdx, isInput) => handleSocketMouseUp(e, node.id, sIdx, isInput)}
                         onContextMenu={(e) => handleNodeContextMenu(e, node.id)}
+                        onResizeStart={(e, handle) => handleNodeResizeStart(e, node, handle)}
                         unitDictionary={unitDictionary}
                         showEfficiency={showEfficiency}
                         isCollapsed={collapseFrames}
                         internalNodes={internalNodesData}
+                        gtnhCatalog={gtnhCatalog}
+                        gtnhAtlasUrl={gtnhAtlasUrl}
                     />
                 )})}
             </div>

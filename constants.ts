@@ -9,6 +9,8 @@ export const DEFAULT_RECIPE: Recipe = {
 
 export const GRID_SIZE = 20;
 export const NODE_WIDTH = 220;
+export const MIN_NODE_WIDTH = 180;
+export const MIN_NODE_HEIGHT = 120;
 
 export const RESOURCE_COLORS: Record<ResourceType, string> = {
   item: 'bg-stone-400 border-stone-300',      

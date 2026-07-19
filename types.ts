@@ -121,6 +121,7 @@ export type DragItem =
   | { type: 'node'; id: string; startX: number; startY: number } 
   | { type: 'frame'; id: string; startX: number; startY: number }
   | { type: 'resize_frame'; id: string; handle: string; startX: number; startY: number; startW: number; startH: number; startFrameX: number; startFrameY: number }
+  | { type: 'resize_node'; id: string; handle: string; startX: number; startY: number; startW: number; startH: number; minH: number }
   | { type: 'connection'; sourceId: string; socketIdx: number; isInput: boolean } 
   | { type: 'selection_box'; startX: number; startY: number }
   | { type: 'pan'; startX: number; startY: number; initialPan: { x: number; y: number } }
