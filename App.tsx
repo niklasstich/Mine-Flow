@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Canvas } from './components/Canvas';
 import { RecipeDialog } from './components/RecipeDialog';
 import { ConnectionDialog } from './components/ConnectionDialog';
@@ -8,12 +8,13 @@ import { ConfirmationDialog } from './components/ConfirmationDialog';
 import { ImportExportDialog } from './components/ImportExportDialog';
 import { RenameDialog } from './components/RenameDialog';
 import { InfoPanel } from './components/InfoPanel';
-import { GtnhBrowserDialog } from './components/GtnhBrowserDialog';
+import { GtnhBrowserDialog, useGtnhCatalog } from './components/GtnhBrowserDialog';
 import { NodeData, Connection, Recipe, Prefab, UnitDictionary, FrameData, Blueprint } from './types';
 import { DEFAULT_RECIPE, PREFABS } from './constants';
 import { DEFAULT_UNIT_DICTIONARY } from './services/unitDictionary';
 import { generateDiagramString, generatePrefabString, parseImportString, DiagramData } from './utils/io';
 import { getNodesInFrame } from './utils/frameUtils';
+import { computeMinNodeHeight } from './utils/geometry';
 import { Plus, Book, Box, Share2, Upload, Undo2, Redo2, Search } from 'lucide-react';
 
 // Bedrock UI Components
@@ -215,7 +216,13 @@ export default function App() {
   });
 
   const [unitDictionary, setUnitDictionary] = useState<UnitDictionary>(DEFAULT_UNIT_DICTIONARY);
-  
+
+  // Load the GTNH icon catalog+atlas app-wide (not just while the browser
+  // dialog is open) as soon as any node on the canvas carries GTNH data, so
+  // NodeEntity can render item icons for those nodes.
+  const hasGtnhContent = useMemo(() => nodes.some(n => !!n.gtnh), [nodes]);
+  const { catalog: gtnhCatalog, atlasUrl: gtnhAtlasUrl } = useGtnhCatalog(hasGtnhContent);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isConnDialogOpen, setIsConnDialogOpen] = useState(false);
   const [isDictOpen, setIsDictOpen] = useState(false);
@@ -338,8 +345,14 @@ export default function App() {
 
   const handleSaveRecipe = (nodeId: string, newLabel: string, newRecipe: Recipe) => {
     handleCheckpoint();
-    setNodes(prev => prev.map(n => 
-      n.id === nodeId ? { ...n, label: newLabel, recipe: newRecipe } : n
+    // A previously-resized node keeps its explicit height, but adding IO
+    // rows can make that height too short to fit them -- grow it (never
+    // shrink it) to whatever the new row count needs.
+    const requiredHeight = computeMinNodeHeight(Math.max(newRecipe.inputs.length, newRecipe.outputs.length));
+    setNodes(prev => prev.map(n =>
+      n.id === nodeId
+        ? { ...n, label: newLabel, recipe: newRecipe, height: n.height ? Math.max(n.height, requiredHeight) : n.height }
+        : n
     ));
     
     // Cleanup edges if sockets were removed
@@ -788,6 +801,8 @@ export default function App() {
                 selectedFrameId={selectedFrameId}
                 setSelectedFrameId={setSelectedFrameId}
                 onCheckpoint={handleCheckpoint}
+                gtnhCatalog={gtnhCatalog}
+                gtnhAtlasUrl={gtnhAtlasUrl}
             />
         </div>
         

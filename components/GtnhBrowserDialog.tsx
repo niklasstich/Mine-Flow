@@ -26,7 +26,12 @@ interface GtnhBrowserDialogProps {
 
 const btnClass = "bg-[#3a3a3a] border-2 border-[#1a1a1a] border-t-[#505050] border-l-[#505050] hover:bg-[#4a4a4a] active:bg-[#2a2a2a] active:border-t-[#1a1a1a] active:border-l-[#1a1a1a] transition-colors text-white font-mono";
 
-function useGtnhCatalog(isOpen: boolean) {
+// Exported so App.tsx can also load the catalog+atlas app-wide (for node
+// icons on the canvas) once any node carries GTNH data, independent of
+// whether this dialog has ever been opened. The module-level caches in
+// gtnhCatalog.ts (manifestCache/catalogCache) mean both call sites share one
+// fetch, not two.
+export function useGtnhCatalog(isOpen: boolean) {
   const [catalog, setCatalog] = useState<GtnhCatalog | null>(null);
   const [atlasUrl, setAtlasUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

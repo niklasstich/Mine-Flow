@@ -20,6 +20,10 @@ test.describe('GTNH recipe browser', () => {
     await expect(page.getByText('Furnace', { exact: true })).toBeVisible();
     await expect(page.getByTitle('Input: Iron Ore (item)')).toBeVisible();
     await expect(page.getByTitle('Output: Iron Ingot (item)')).toBeVisible();
+
+    // GTNH-sourced slots resolve a goodsId against the catalog, so item icons
+    // render on the canvas -- unlike hand-entered/manual recipe nodes.
+    await expect(page.locator('.item-icon')).toHaveCount(2);
   });
 
   test('closing the dialog without picking a recipe adds nothing', async ({ page }) => {

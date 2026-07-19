@@ -1,6 +1,9 @@
 import React, { memo } from 'react';
 import { Settings, AlertTriangle, CheckCircle, Copy, Trash2, Pencil, Box } from 'lucide-react';
-import { NodeData, FlowState, UnitDictionary } from '../types';
+import { NodeData, FlowState, UnitDictionary, ItemStack } from '../types';
+import { GtnhIcon } from './GtnhIcon';
+import { GtnhCatalog } from '../services/gtnhCatalog';
+import { computeMinNodeHeight } from '../utils/geometry';
 
 export interface InternalNodeStatus {
   label: string;
@@ -25,7 +28,19 @@ interface NodeEntityProps {
   showEfficiency: boolean;
   isCollapsed: boolean;
   internalNodes?: InternalNodeStatus[];
+  onResizeStart?: (e: React.MouseEvent, handle: string) => void;
+  gtnhCatalog?: GtnhCatalog | null;
+  gtnhAtlasUrl?: string | null;
 }
+
+// Resolve the icon atlas id for an item/fluid slot, if we have catalog data
+// for it -- generic/manual recipe slots (no gtnh.goodsId) never resolve.
+const resolveIconId = (item: ItemStack, catalog: GtnhCatalog | null | undefined): number | undefined => {
+  const goodsId = item.gtnh?.goodsId;
+  if (!goodsId || !catalog) return undefined;
+  const goods = item.type === 'fluid' ? catalog.fluidsById.get(goodsId) : catalog.itemsById.get(goodsId);
+  return goods?.iconId;
+};
 
 // Helper to determine status color based on value
 const getStatusColor = (value: number): string => {
@@ -54,7 +69,10 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
   isFrame,
   showEfficiency,
   isCollapsed,
-  internalNodes
+  internalNodes,
+  onResizeStart,
+  gtnhCatalog,
+  gtnhAtlasUrl
 }) => {
   const saturation = flowData?.saturation ?? 1;
   const outputRatio = flowData?.outputFlowRatio ?? 1;
@@ -75,7 +93,13 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
   let bgColor = isFrame ? "bg-[#3a3a3a]" : "bg-[#252526]";
 
   const width = node.width || 240;
-  const heightStyle = node.height ? { height: node.height } : {};
+  const ioRowCount = Math.max(node.recipe.inputs.length, node.recipe.outputs.length);
+  // Belt-and-suspenders: node.height is normally kept in sync with row count
+  // wherever the recipe is edited (see App.tsx's handleSaveRecipe), but this
+  // guards every render against any path that isn't -- overflow is visible,
+  // not clipped, so a too-short explicit height lets rows spill out past the
+  // node's own bottom border instead of just getting cut off.
+  const heightStyle = node.height ? { height: Math.max(node.height, computeMinNodeHeight(ioRowCount)) } : {};
 
   // Construct Box Shadow
   // 1. Selection Ring (if selected): 2px gap (bg color), 2px white ring
@@ -83,6 +107,100 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
   const selectionShadow = isSelected ? '0 0 0 2px #1c1917, 0 0 0 4px white, ' : '';
   const dropShadow = '4px 4px 0px rgba(0,0,0,0.5)';
   const combinedShadow = selectionShadow + dropShadow;
+
+  // An IO row spans both grid columns when its counterpart slot doesn't
+  // exist at that row index, so a lone long label isn't squeezed into half
+  // the node width while the other half sits empty.
+  const renderInputRow = (item: ItemStack, idx: number, spanFull: boolean) => {
+    const resourceDef = unitDictionary[item.type];
+    const color = resourceDef?.color || '#a8a29e';
+    const typeLabel = resourceDef?.label || item.type;
+    const iconId = resolveIconId(item, gtnhCatalog);
+    return (
+    <div key={`in-${idx}`} className={`relative flex items-center h-6 min-w-0 group/socket ${spanFull ? 'col-span-2' : ''}`}>
+        {/* Input Socket Target - Square Slot Look */}
+        <div
+        className="absolute -left-[30px] w-6 h-6 bg-[#1a1a1a] border border-[#555] z-50 cursor-crosshair flex items-center justify-center hover:border-white transition-colors shadow-inner"
+        onMouseDown={(e) => onSocketMouseDown(e, idx, true)}
+        onMouseUp={(e) => onSocketMouseUp(e, idx, true)}
+        title={`Input: ${item.name} (${item.type})`}
+        >
+            {/* Visual Square */}
+            <div
+                className="w-3 h-3 shadow-sm"
+                style={{ backgroundColor: color }}
+            />
+        </div>
+
+        {!isCollapsed && (
+        <div className="flex items-center gap-1 min-w-0 pl-1">
+            {iconId !== undefined && gtnhAtlasUrl && (
+                <GtnhIcon atlasUrl={gtnhAtlasUrl} iconId={iconId} size={16} className="item-icon" />
+            )}
+            <span
+                className="text-[8px] font-bold uppercase leading-none px-1 py-0.5 rounded-sm shrink-0"
+                style={{ color, backgroundColor: `${color}26`, border: `1px solid ${color}66` }}
+                title={typeLabel}
+            >
+                {typeLabel.slice(0, 2)}
+            </span>
+            <span className="text-xs text-[#cccccc] truncate select-none pointer-events-none font-mono" title={item.name}>
+                {item.amount} {item.unit && <span className="text-[#888888] text-[10px]">{item.unit}</span>} {item.name}
+            </span>
+            {/* Custom hover tooltip: full text never gets clipped, unlike the truncated label above */}
+            <div data-testid="io-tooltip-in" className="absolute left-0 -top-7 hidden group-hover/socket:block z-50 bg-[#111] text-white text-[10px] px-2 py-1 rounded border border-[#555] whitespace-nowrap shadow-lg pointer-events-none">
+                {item.amount} {item.unit} {item.name} <span className="text-[#888]">({typeLabel})</span>
+            </div>
+        </div>
+        )}
+    </div>
+    );
+  };
+
+  const renderOutputRow = (item: ItemStack, idx: number, spanFull: boolean) => {
+    const resourceDef = unitDictionary[item.type];
+    const color = resourceDef?.color || '#a8a29e';
+    const typeLabel = resourceDef?.label || item.type;
+    const iconId = resolveIconId(item, gtnhCatalog);
+    return (
+    <div key={`out-${idx}`} className={`relative flex items-center justify-end h-6 min-w-0 group/socket ${spanFull ? 'col-span-2' : ''}`}>
+        {!isCollapsed && (
+        <div className="flex items-center gap-1 min-w-0 pr-1 justify-end">
+            {/* Custom hover tooltip: full text never gets clipped, unlike the truncated label below */}
+            <div data-testid="io-tooltip-out" className="absolute right-0 -top-7 hidden group-hover/socket:block z-50 bg-[#111] text-white text-[10px] px-2 py-1 rounded border border-[#555] whitespace-nowrap shadow-lg pointer-events-none">
+                {item.amount} {item.unit} {item.name} <span className="text-[#888]">({typeLabel})</span>
+            </div>
+            <span className="text-xs text-[#cccccc] truncate text-right select-none pointer-events-none font-mono" title={item.name}>
+                {item.amount} {item.unit && <span className="text-[#888888] text-[10px]">{item.unit}</span>} {item.name}
+            </span>
+            <span
+                className="text-[8px] font-bold uppercase leading-none px-1 py-0.5 rounded-sm shrink-0"
+                style={{ color, backgroundColor: `${color}26`, border: `1px solid ${color}66` }}
+                title={typeLabel}
+            >
+                {typeLabel.slice(0, 2)}
+            </span>
+            {iconId !== undefined && gtnhAtlasUrl && (
+                <GtnhIcon atlasUrl={gtnhAtlasUrl} iconId={iconId} size={16} className="item-icon" />
+            )}
+        </div>
+        )}
+        {/* Output Socket Target - Square Slot Look */}
+        <div
+        className="absolute -right-[30px] w-6 h-6 bg-[#1a1a1a] border border-[#555] z-50 cursor-crosshair flex items-center justify-center hover:border-white transition-colors shadow-inner"
+        onMouseDown={(e) => onSocketMouseDown(e, idx, false)}
+        onMouseUp={(e) => onSocketMouseUp(e, idx, false)}
+        title={`Output: ${item.name} (${item.type})`}
+        >
+            {/* Visual Square */}
+            <div
+                className="w-3 h-3 shadow-sm"
+                style={{ backgroundColor: color }}
+            />
+        </div>
+    </div>
+    );
+  };
 
   return (
     <div
@@ -138,7 +256,7 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
 
         {/* Body */}
         <div className="p-3 relative flex-1 bg-gradient-to-br from-white/5 to-transparent flex flex-col">
-            
+
             {/* Stats Row (Input Saturation | Rate | Output Efficiency) */}
             {!isCollapsed && (
                 <div className="flex justify-between items-center mb-4 text-[10px] font-mono select-none">
@@ -176,64 +294,21 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
                 </div>
             )}
 
-            {/* IO Area */}
-            <div className={`flex justify-between gap-4 ${isCollapsed ? 'mt-auto' : ''}`}>
-            {/* Inputs */}
-            <div className="flex flex-col gap-3 w-1/2">
-                {node.recipe.inputs.map((item, idx) => {
-                const color = unitDictionary[item.type]?.color || '#a8a29e';
-                return (
-                <div key={`in-${idx}`} className="relative flex items-center h-6 group/socket">
-                    {/* Input Socket Target - Square Slot Look */}
-                    <div 
-                    className="absolute -left-[30px] w-6 h-6 bg-[#1a1a1a] border border-[#555] z-50 cursor-crosshair flex items-center justify-center hover:border-white transition-colors shadow-inner"
-                    onMouseDown={(e) => onSocketMouseDown(e, idx, true)}
-                    onMouseUp={(e) => onSocketMouseUp(e, idx, true)}
-                    title={`Input: ${item.name} (${item.type})`}
-                    >
-                        {/* Visual Square */}
-                        <div 
-                            className="w-3 h-3 shadow-sm"
-                            style={{ backgroundColor: color }}
-                        />
-                    </div>
-                    
-                    {!isCollapsed && (
-                    <span className="text-xs text-[#cccccc] truncate pl-1 select-none pointer-events-none font-mono" title={item.name}>
-                        {item.amount} {item.unit && <span className="text-[#888888] text-[10px]">{item.unit}</span>} {item.name}
-                    </span>
-                    )}
-                </div>
-                )})}
-            </div>
-
-            {/* Outputs */}
-            <div className="flex flex-col gap-3 w-1/2 items-end">
-                {node.recipe.outputs.map((item, idx) => {
-                const color = unitDictionary[item.type]?.color || '#a8a29e';
-                return (
-                <div key={`out-${idx}`} className="relative flex items-center justify-end h-6 w-full group/socket">
-                    {!isCollapsed && (
-                    <span className="text-xs text-[#cccccc] truncate pr-1 text-right select-none pointer-events-none font-mono" title={item.name}>
-                        {item.amount} {item.unit && <span className="text-[#888888] text-[10px]">{item.unit}</span>} {item.name}
-                    </span>
-                    )}
-                    {/* Output Socket Target - Square Slot Look */}
-                    <div
-                    className="absolute -right-[30px] w-6 h-6 bg-[#1a1a1a] border border-[#555] z-50 cursor-crosshair flex items-center justify-center hover:border-white transition-colors shadow-inner"
-                    onMouseDown={(e) => onSocketMouseDown(e, idx, false)}
-                    onMouseUp={(e) => onSocketMouseUp(e, idx, false)}
-                    title={`Output: ${item.name} (${item.type})`}
-                    >
-                        {/* Visual Square */}
-                        <div 
-                            className="w-3 h-3 shadow-sm"
-                            style={{ backgroundColor: color }}
-                        />
-                    </div>
-                </div>
-                )})}
-            </div>
+            {/* IO Area: a 2-column grid, one row per max(inputs, outputs) index.
+                A row's cell spans both columns when its counterpart slot is
+                absent, so a lone label can use the full node width instead
+                of being capped at half with the other half sitting empty. */}
+            <div className={`grid grid-cols-2 gap-x-4 gap-y-3 ${isCollapsed ? 'mt-auto' : ''}`}>
+                {Array.from({ length: ioRowCount }).map((_, idx) => {
+                    const inputItem = node.recipe.inputs[idx];
+                    const outputItem = node.recipe.outputs[idx];
+                    return (
+                        <React.Fragment key={idx}>
+                            {inputItem && renderInputRow(inputItem, idx, !outputItem)}
+                            {outputItem && renderOutputRow(outputItem, idx, !inputItem)}
+                        </React.Fragment>
+                    );
+                })}
             </div>
         </div>
 
@@ -259,6 +334,17 @@ export const NodeEntity: React.FC<NodeEntityProps> = memo(({
             </div>
         )}
       </div>
+
+      {/* Resize Handle (bottom-right corner, machines only -- frames resize via their own border handle) */}
+      {!isFrame && onResizeStart && (
+          <div
+              data-testid="node-resize-handle"
+              className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize flex items-end justify-end p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-40"
+              onMouseDown={(e) => { e.stopPropagation(); onResizeStart(e, 'se'); }}
+          >
+              <div className="w-2 h-2 bg-white/30 border border-white/50" />
+          </div>
+      )}
     </div>
   );
 });
