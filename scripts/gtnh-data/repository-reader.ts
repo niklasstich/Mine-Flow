@@ -3,6 +3,9 @@
 // only exists to make interactive NEI search fast and isn't needed for a one-shot
 // walk of every object. Binary layout must stay in lockstep with that file.
 
+export { RecipeIoType } from "./portable-types";
+import { RecipeIoType } from "./portable-types";
+
 const DATA_VERSION = 5;
 const charCodeItem = "i".charCodeAt(0);
 const charCodeFluid = "f".charCodeAt(0);
@@ -304,14 +307,6 @@ export class GtRecipeMetadata extends MemMappedObject {
   get value(): number {
     return this.GetDouble(1);
   }
-}
-
-export enum RecipeIoType {
-  ItemInput = 0,
-  OreDictInput,
-  FluidInput,
-  ItemOutput,
-  FluidOutput,
 }
 
 export type RecipeInOut = {

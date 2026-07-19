@@ -8,6 +8,25 @@ export interface ItemStack {
   amount: number;
   type: ResourceType;
   unit?: string; // e.g., 'mB', 'B', 'RF', 'J'
+  gtnh?: GtnhItemStackData;
+}
+
+// GTNH-specific extensions for an ItemStack, namespaced so generic/manual
+// recipes never need to know this exists. See services/gtnhCatalog.ts for the
+// data these are sourced from.
+export interface GtnhItemStackData {
+  // The resolved concrete item/fluid id (gtnhCatalog.ts PortableItem/PortableFluid.id)
+  // this slot displays. For an OreDict slot this is the chosen substitute's id,
+  // same value as chosenSubstituteId below.
+  goodsId?: string;
+  // Present when this slot accepts any item in an OreDict group (e.g. any
+  // "plate" variant) rather than one fixed item -- the OreDict's id.
+  oreDictId?: string;
+  // Which concrete item id (one of the OreDict's itemIds) was picked to
+  // satisfy this slot. Only meaningful when oreDictId is set.
+  chosenSubstituteId?: string;
+  // Output chance, 0-1. Undefined/1 means always produced.
+  probability?: number;
 }
 
 export interface Recipe {
@@ -23,8 +42,24 @@ export interface NodeData {
   y: number;
   label: string;
   recipe: Recipe;
+  multiplier?: number; // Machine count / scaling factor, default 1
   width?: number;
   height?: number;
+  gtnh?: GtnhNodeData;
+}
+
+// GTNH-specific extensions for a NodeData, namespaced so generic/manual nodes
+// never carry these fields. See services/gtnhCatalog.ts for the data these
+// are sourced from and scripts/gtnh-data/machines.ts for how voltageTier /
+// crafterItemId feed the overclock/parallel math (§4, not yet wired up).
+export interface GtnhNodeData {
+  recipeId: string; // Source GTNH recipe id, so the node can be re-picked/refreshed
+  recipeType: string; // RecipeType name (machine/crafting category)
+  voltageTier: number; // Chosen operating voltage tier
+  amperage: number;
+  crafterItemId?: string; // Chosen singleblock/multiblock machine item id
+  circuitConflicts?: number;
+  specialValue?: number;
 }
 
 export interface FrameData {

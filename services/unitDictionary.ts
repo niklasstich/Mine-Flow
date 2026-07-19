@@ -1,4 +1,5 @@
 import { ResourceType, UnitDictionary } from "../types";
+import { voltageTier as GTNH_VOLTAGE_TIERS, type GtVoltageTier } from "../scripts/gtnh-data/utils";
 
 // Default Dictionary Definition
 export const DEFAULT_UNIT_DICTIONARY: UnitDictionary = {
@@ -83,3 +84,18 @@ export const getUnitsForType = (dict: UnitDictionary, type: ResourceType) => {
 export const getDefaultUnit = (dict: UnitDictionary, type: ResourceType): string => {
     return dict[type]?.baseUnit || 'count';
 }
+
+// GTNH voltage tiers are a machine capability gate -- which crafters/recipes a
+// node can accept -- not a quantity conversion, so they deliberately don't
+// become UnitDictionary units (see NodeData.gtnh.voltageTier in types.ts).
+// Re-exported (not redefined) from scripts/gtnh-data/utils.ts so tier index,
+// name, and base EU/t stay exactly aligned with machines.ts and the exported
+// recipe data's gt.voltageTier field.
+export { GTNH_VOLTAGE_TIERS };
+export type { GtVoltageTier };
+
+export const getVoltageTierName = (tier: number): string =>
+  GTNH_VOLTAGE_TIERS[tier]?.name ?? `Tier ${tier}`;
+
+export const getVoltageTierBaseVoltage = (tier: number): number =>
+  GTNH_VOLTAGE_TIERS[tier]?.voltage ?? 0;

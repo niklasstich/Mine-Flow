@@ -19,9 +19,17 @@ import {
   OreDict,
   RecipeType,
   Recipe,
-  RecipeIoType,
 } from "./repository-reader";
 import { resolveMineFlowRoot, readGunzippedArrayBuffer } from "./node-helpers";
+import type {
+  PortableItem,
+  PortableFluid,
+  PortableOreDict,
+  PortableRecipeType,
+  PortableRecipe,
+  PortableCatalog,
+  GtnhManifest,
+} from "./portable-types";
 
 const MINE_FLOW_ROOT = resolveMineFlowRoot(import.meta.url);
 
@@ -38,75 +46,6 @@ function parseArgs(argv: string[]) {
   }
   return { sourceDir, version, label };
 }
-
-type PortableRecipeIo = {
-  type: RecipeIoType;
-  goodsId: string;
-  slot: number;
-  amount: number;
-  probability: number;
-};
-
-type PortableItem = {
-  id: string;
-  name: string;
-  mod: string;
-  internalName: string;
-  iconId: number;
-  tooltip: string | null;
-  unlocalizedName: string;
-  nbt: string | null;
-  stackSize: number;
-  damage: number;
-  container: { fluidId: string; amount: number; emptyItemId: string } | null;
-  production: string[];
-  consumption: string[];
-};
-
-type PortableFluid = {
-  id: string;
-  name: string;
-  mod: string;
-  internalName: string;
-  iconId: number;
-  tooltip: string | null;
-  unlocalizedName: string;
-  nbt: string | null;
-  isGas: boolean;
-  containerItemIds: string[];
-  production: string[];
-  consumption: string[];
-};
-
-type PortableOreDict = {
-  id: string;
-  itemIds: string[];
-};
-
-type PortableRecipeType = {
-  name: string;
-  category: string;
-  shapeless: boolean;
-  dimensions: number[];
-  singleblockItemIds: string[];
-  multiblockItemIds: string[];
-  defaultCrafterItemId: string | null;
-};
-
-type PortableRecipe = {
-  id: string;
-  recipeType: string;
-  items: PortableRecipeIo[];
-  gt: {
-    voltage: number;
-    durationTicks: number;
-    amperage: number;
-    voltageTier: number;
-    circuitConflicts: number;
-    specialValue: number;
-    metadata: { key: string; value: number }[];
-  } | null;
-};
 
 function toRecipeIds(repository: Repository, recipePointers: Int32Array): string[] {
   const ids: string[] = new Array(recipePointers.length);
@@ -237,7 +176,7 @@ function convert(sourceDir: string, version: string, label: string) {
     recipes: recipes.length,
   };
 
-  const payload = {
+  const payload: PortableCatalog = {
     version,
     generatedAt: new Date().toISOString(),
     counts,
@@ -275,12 +214,12 @@ function convert(sourceDir: string, version: string, label: string) {
 function updateManifest(
   version: string,
   label: string,
-  counts: Record<string, number>,
+  counts: PortableCatalog["counts"],
   dataFile: string,
   atlasFile: string
 ) {
   const manifestPath = path.join(MINE_FLOW_ROOT, "public", "gtnh-data", "manifest.json");
-  let manifest: { versions: Record<string, unknown> } = { versions: {} };
+  let manifest: GtnhManifest = { versions: {} };
   if (existsSync(manifestPath)) {
     manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
   }

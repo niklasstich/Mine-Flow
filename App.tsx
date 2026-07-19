@@ -8,12 +8,13 @@ import { ConfirmationDialog } from './components/ConfirmationDialog';
 import { ImportExportDialog } from './components/ImportExportDialog';
 import { RenameDialog } from './components/RenameDialog';
 import { InfoPanel } from './components/InfoPanel';
+import { GtnhBrowserDialog } from './components/GtnhBrowserDialog';
 import { NodeData, Connection, Recipe, Prefab, UnitDictionary, FrameData, Blueprint } from './types';
 import { DEFAULT_RECIPE, PREFABS } from './constants';
 import { DEFAULT_UNIT_DICTIONARY } from './services/unitDictionary';
 import { generateDiagramString, generatePrefabString, parseImportString, DiagramData } from './utils/io';
 import { getNodesInFrame } from './utils/frameUtils';
-import { Plus, Book, Box, Share2, Upload, Undo2, Redo2 } from 'lucide-react';
+import { Plus, Book, Box, Share2, Upload, Undo2, Redo2, Search } from 'lucide-react';
 
 // Bedrock UI Components
 const BedrockButton = ({ onClick, children, className = "", title = "" }: { onClick?: () => void, children?: React.ReactNode, className?: string, title?: string }) => (
@@ -218,6 +219,7 @@ export default function App() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isConnDialogOpen, setIsConnDialogOpen] = useState(false);
   const [isDictOpen, setIsDictOpen] = useState(false);
+  const [isGtnhBrowserOpen, setIsGtnhBrowserOpen] = useState(false);
   
   // Import/Export State
   const [ioState, setIoState] = useState<{
@@ -297,6 +299,11 @@ export default function App() {
       recipe: JSON.parse(JSON.stringify(DEFAULT_RECIPE))
     };
     setNodes([...nodes, newNode]);
+  };
+
+  const handleAddGtnhNode = (node: NodeData) => {
+    handleCheckpoint();
+    setNodes(prev => [...prev, node]);
   };
 
   const handleDuplicateNode = (nodeId: string) => {
@@ -655,7 +662,7 @@ export default function App() {
       });
   };
 
-  const isOverlayOpen = isDialogOpen || isConnDialogOpen || isDictOpen || !!creatingPrefab || !!editingPrefabId || ioState.isOpen || renameState.isOpen;
+  const isOverlayOpen = isDialogOpen || isConnDialogOpen || isDictOpen || isGtnhBrowserOpen || !!creatingPrefab || !!editingPrefabId || ioState.isOpen || renameState.isOpen;
   const editingPrefab = editingPrefabId ? library.find(p => p.id === editingPrefabId) : null;
 
   return (
@@ -725,13 +732,19 @@ export default function App() {
 
           <div className="h-8 w-px bg-white/20 mx-2"></div>
 
-          <BedrockButton 
+          <BedrockButton
             onClick={() => setIsDictOpen(true)}
           >
             <Book size={18} />
             Dictionary
           </BedrockButton>
-          <BedrockButton 
+          <BedrockButton
+            onClick={() => setIsGtnhBrowserOpen(true)}
+          >
+            <Search size={18} />
+            Browse GTNH
+          </BedrockButton>
+          <BedrockButton
             onClick={handleAddNode}
           >
             <Plus size={18} />
@@ -864,13 +877,20 @@ export default function App() {
           />
       )}
 
-      <DictionaryEditor 
-          isOpen={isDictOpen} 
+      <DictionaryEditor
+          isOpen={isDictOpen}
           onClose={() => setIsDictOpen(false)}
           dictionary={unitDictionary}
           onSave={setUnitDictionary}
       />
-      
+
+      <GtnhBrowserDialog
+          isOpen={isGtnhBrowserOpen}
+          onClose={() => setIsGtnhBrowserOpen(false)}
+          onAddNode={handleAddGtnhNode}
+          spawnPosition={{ x: 100 + (nodes.length * 20) % 200, y: 100 + (nodes.length * 20) % 200 }}
+      />
+
       <ImportExportDialog 
           isOpen={ioState.isOpen}
           onClose={() => setIoState(prev => ({ ...prev, isOpen: false }))}

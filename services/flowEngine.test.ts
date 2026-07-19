@@ -208,4 +208,28 @@ describe('calculateFlows', () => {
     expect(nodeRates.b.actualOpRate).toBe(0);
     expect(nodeRates.a.starvedItems).toContain('scrap');
   });
+
+  it('scales throughput by node multiplier (machine count)', () => {
+    const source = node('source', {
+      inputs: [],
+      outputs: [item('ore', 1)],
+      processTime: 1,
+      processTimeUnit: 'seconds',
+    });
+    source.multiplier = 3;
+    const sink = node('sink', {
+      inputs: [item('ore', 3)],
+      outputs: [],
+      processTime: 1,
+      processTimeUnit: 'seconds',
+    });
+    const e = edge('source-sink', 'source', 'sink');
+
+    const { nodeRates, edgeFlows } = run([source, sink], [e]);
+
+    expect(nodeRates.source.actualOpRate).toBeCloseTo(3, 6);
+    expect(nodeRates.sink.efficiency).toBeCloseTo(1, 6);
+    expect(edgeFlows['source-sink'].status).toBe('balanced');
+    expect(edgeFlows['source-sink'].rate).toBeCloseTo(3, 6);
+  });
 });

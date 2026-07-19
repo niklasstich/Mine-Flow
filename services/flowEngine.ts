@@ -52,7 +52,7 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
 
               const timeFactor = getConversionFactor(unitDictionary, 'time', targetNode.recipe.processTimeUnit || 'seconds');
               const time = targetNode.recipe.processTime * timeFactor;
-              const maxOpRate = time > 0 ? 1 / time : 0;
+              const maxOpRate = (time > 0 ? 1 / time : 0) * (targetNode.multiplier ?? 1);
 
               const inputFactor = getConversionFactor(unitDictionary, input.type, input.unit);
               const demandRate = maxOpRate * input.amount * inputFactor;
@@ -72,8 +72,8 @@ export const calculateFlows = (nodes: NodeData[], edges: Connection[], unitDicti
       
       const timeFactor = getConversionFactor(unitDictionary, 'time', recipe.processTimeUnit || 'seconds');
       const timeInSeconds = recipe.processTime * timeFactor;
-      
-      const maxOpRate = timeInSeconds > 0 ? 1 / timeInSeconds : 0;
+
+      const maxOpRate = (timeInSeconds > 0 ? 1 / timeInSeconds : 0) * (node.multiplier ?? 1);
       
       let limitingRatio = 1.0;
       const starvedItems: string[] = [];
